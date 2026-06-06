@@ -1,0 +1,78 @@
+<h2>Golang_QQ 即时通讯 — API & WebSocket 协议设计</h2>
+<p class="subtitle">RESTful API + WebSocket 消息协议</p>
+
+<div class="section">
+  <h3>REST API 端点</h3>
+  <div class="mockup">
+    <div class="mockup-header">API Routes</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.8;">
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/auth/register</span>      <span style="color:#888;">// 注册</span><br>
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/auth/login</span>         <span style="color:#888;">// 登录，返回 JWT token</span><br>
+      <span style="color:#81c784;">GET   </span> <span style="color:#e0e0e0;">/api/users/me</span>           <span style="color:#888;">// 获取当前用户信息</span><br>
+      <span style="color:#81c784;">PUT   </span> <span style="color:#e0e0e0;">/api/users/me</span>           <span style="color:#888;">// 更新个人信息</span><br>
+      <span style="color:#81c784;">GET   </span> <span style="color:#e0e0e0;">/api/users/search?q=</span>    <span style="color:#888;">// 搜索用户</span><br>
+      <span style="color:#81c784;">GET   </span> <span style="color:#e0e0e0;">/api/conversations</span>      <span style="color:#888;">// 会话列表</span><br>
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/conversations</span>      <span style="color:#888;">// 创建单聊会话</span><br>
+      <span style="color:#81c784;">GET   </span> <span style="color:#e0e0e0;">/api/conversations/:id/messages</span> <span style="color:#888;">// 历史消息(分页)</span><br>
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/groups</span>             <span style="color:#888;">// 创建群组</span><br>
+      <span style="color:#81c784;">GET   </span> <span style="color:#e0e0e0;">/api/groups/:id</span>         <span style="color:#888;">// 群组详情</span><br>
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/groups/:id/members</span> <span style="color:#888;">// 邀请入群</span><br>
+      <span style="color:#81c784;">DELETE</span> <span style="color:#e0e0e0;">/api/groups/:id/members/:uid</span> <span style="color:#888;">// 移出群/退群</span><br>
+      <span style="color:#81c784;">POST  </span> <span style="color:#e0e0e0;">/api/upload</span>             <span style="color:#888;">// 文件上传</span><br>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>WebSocket 协议</h3>
+  <div class="mockup">
+    <div class="mockup-header">WS Endpoint: ws://localhost:8080/ws?token=JWT_TOKEN</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.6;">
+      <div style="color:#f9a825; margin-bottom: 8px;">// 所有消息格式: JSON { type, data }</div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="color:#81c784;">// 客户端 → 服务器</div>
+        <span style="color:#e0e0e0;">chat</span>        <span style="color:#888;">→ 发送消息</span>     <span style="color:#666;">{conversation_id, type, content}</span><br>
+        <span style="color:#e0e0e0;">typing</span>      <span style="color:#888;">→ 正在输入</span>     <span style="color:#666;">{conversation_id}</span><br>
+        <span style="color:#e0e0e0;">read</span>        <span style="color:#888;">→ 标记已读</span>     <span style="color:#666;">{conversation_id, message_id}</span><br>
+        <span style="color:#e0e0e0;">heartbeat</span>   <span style="color:#888;">→ 心跳保活</span>     <span style="color:#666;">{}</span>
+      </div>
+
+      <div>
+        <div style="color:#e57373;">// 服务器 → 客户端</div>
+        <span style="color:#e0e0e0;">new_message</span>  <span style="color:#888;">→ 新消息通知</span>   <span style="color:#666;">{message对象}</span><br>
+        <span style="color:#e0e0e0;">typing</span>       <span style="color:#888;">→ 对方输入中</span>   <span style="color:#666;">{conversation_id, user_id, username}</span><br>
+        <span style="color:#e0e0e0;">read_receipt</span> <span style="color:#888;">→ 已读回执</span>     <span style="color:#666;">{conversation_id, message_id, user_id}</span><br>
+        <span style="color:#e0e0e0;">user_online</span>  <span style="color:#888;">→ 用户上线</span>     <span style="color:#666;">{user_id}</span><br>
+        <span style="color:#e0e0e0;">user_offline</span> <span style="color:#888;">→ 用户下线</span>     <span style="color:#666;">{user_id}</span><br>
+        <span style="color:#e0e0e0;">heartbeat</span>    <span style="color:#888;">→ 心跳响应</span>     <span style="color:#666;">{}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>消息流转</h3>
+  <div class="mockup">
+    <div class="mockup-header">Message Flow</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; line-height: 2;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="background: #3a5e3a; color: #c0e0c0; padding: 4px 10px; border-radius: 4px;">用户A</span>
+        <span style="color: #888;">发送 chat 消息</span>
+        <span style="color: #666;">→</span>
+        <span style="background: #2a2a5e; color: #aaa; padding: 4px 10px; border-radius: 4px;">WebSocket Hub</span>
+        <span style="color: #666;">→</span>
+        <span style="background: #5e3a3a; color: #e0c0c0; padding: 4px 10px; border-radius: 4px;">MongoDB</span>
+      </div>
+      <div style="text-align: center; color: #666; margin: 4px 0;">↓ 写入后</div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="background: #2a2a5e; color: #aaa; padding: 4px 10px; border-radius: 4px;">WebSocket Hub</span>
+        <span style="color: #888;">广播 new_message</span>
+        <span style="color: #666;">→</span>
+        <span style="background: #3a5e3a; color: #c0e0c0; padding: 4px 10px; border-radius: 4px;">用户B (在线)</span>
+        <span style="color: #666;">|</span>
+        <span style="background: #4a4a4e; color: #888; padding: 4px 10px; border-radius: 4px;">用户C (离线，下次上线拉取)</span>
+      </div>
+    </div>
+  </div>
+</div>

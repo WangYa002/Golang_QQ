@@ -1,0 +1,79 @@
+<h2>Golang_QQ 即时通讯 — 数据模型</h2>
+<p class="subtitle">MongoDB Collections 设计</p>
+
+<div class="section">
+  <h3>users — 用户表</h3>
+  <div class="mockup">
+    <div class="mockup-header">Collection: users</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.6;">
+      <span style="color:#f9a825;">_id</span>: ObjectId          <span style="color:#888;">// 主键</span><br>
+      <span style="color:#f9a825;">username</span>: string       <span style="color:#888;">// 用户名，唯一</span><br>
+      <span style="color:#f9a825;">password</span>: string        <span style="color:#888;">// bcrypt 加密</span><br>
+      <span style="color:#f9a825;">nickname</span>: string        <span style="color:#888;">// 昵称</span><br>
+      <span style="color:#f9a825;">avatar</span>: string          <span style="color:#888;">// 头像 URL</span><br>
+      <span style="color:#f9a825;">status</span>: string          <span style="color:#888;">// online / offline / away</span><br>
+      <span style="color:#f9a825;">created_at</span>: datetime    <span style="color:#888;">// 注册时间</span><br>
+      <span style="color:#f9a825;">updated_at</span>: datetime    <span style="color:#888;">// 更新时间</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>conversations — 会话表</h3>
+  <div class="mockup">
+    <div class="mockup-header">Collection: conversations</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.6;">
+      <span style="color:#f9a825;">_id</span>: ObjectId            <span style="color:#888;">// 主键</span><br>
+      <span style="color:#f9a825;">type</span>: string              <span style="color:#888;">// "private" 单聊 / "group" 群聊</span><br>
+      <span style="color:#f9a825;">members</span>: []ObjectId      <span style="color:#888;">// 参与者用户ID列表</span><br>
+      <span style="color:#f9a825;">group_id</span>: ObjectId|null  <span style="color:#888;">// 群聊时关联 group</span><br>
+      <span style="color:#f9a825;">last_message</span>: embedded   <span style="color:#888;">// 最后一条消息摘要</span><br>
+      <span style="color:#f9a825;">created_at</span>: datetime<br>
+      <span style="color:#f9a825;">updated_at</span>: datetime
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>messages — 消息表</h3>
+  <div class="mockup">
+    <div class="mockup-header">Collection: messages</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.6;">
+      <span style="color:#f9a825;">_id</span>: ObjectId            <span style="color:#888;">// 主键</span><br>
+      <span style="color:#f9a825;">conversation_id</span>: ObjectId <span style="color:#888;">// 所属会话</span><br>
+      <span style="color:#f9a825;">sender_id</span>: ObjectId      <span style="color:#888;">// 发送者</span><br>
+      <span style="color:#f9a825;">type</span>: string              <span style="color:#888;">// "text" / "image" / "file" / "system"</span><br>
+      <span style="color:#f9a825;">content</span>: string           <span style="color:#888;">// 文本内容或文件URL</span><br>
+      <span style="color:#f9a825;">metadata</span>: object|null    <span style="color:#888;">// 富媒体附加信息 (尺寸/文件名等)</span><br>
+      <span style="color:#f9a825;">read_by</span>: []ObjectId       <span style="color:#888;">// 已读用户列表</span><br>
+      <span style="color:#f9a825;">created_at</span>: datetime
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>groups — 群组表</h3>
+  <div class="mockup">
+    <div class="mockup-header">Collection: groups</div>
+    <div class="mockup-body" style="padding: 16px; font-size: 13px; font-family: monospace; line-height: 1.6;">
+      <span style="color:#f9a825;">_id</span>: ObjectId            <span style="color:#888;">// 主键</span><br>
+      <span style="color:#f9a825;">name</span>: string              <span style="color:#888;">// 群名</span><br>
+      <span style="color:#f9a825;">avatar</span>: string            <span style="color:#888;">// 群头像</span><br>
+      <span style="color:#f9a825;">owner_id</span>: ObjectId       <span style="color:#888;">// 群主</span><br>
+      <span style="color:#f9a825;">members</span>: []object         <span style="color:#888;">// [{user_id, role, joined_at}]</span><br>
+      <span style="color:#f9a825;">max_members</span>: int          <span style="color:#888;">// 最大人数，默认 500</span><br>
+      <span style="color:#f9a825;">created_at</span>: datetime<br>
+      <span style="color:#f9a825;">updated_at</span>: datetime
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>索引策略</h3>
+  <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 13px; font-family: monospace; line-height: 1.8;">
+    users: <span style="color:#81c784;">{ username: 1 }</span> (unique)<br>
+    messages: <span style="color:#81c784;">{ conversation_id: 1, created_at: -1 }</span> (消息列表查询)<br>
+    conversations: <span style="color:#81c784;">{ members: 1 }</span> (用户会话列表)<br>
+    groups: <span style="color:#81c784;">{ "members.user_id": 1 }</span> (用户所在群)
+  </div>
+</div>
