@@ -7,79 +7,76 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
-  const tokenRef = useRef(useAuthStore.getState().token);
-  const addMessageRef = useRef(useChatStore.getState().addMessage);
-  const setTypingRef = useRef(useChatStore.getState().setTyping);
-  const setUserOnlineRef = useRef(useChatStore.getState().setUserOnline);
-  const setUserOfflineRef = useRef(useChatStore.getState().setUserOffline);
-
-  // Keep refs in sync with store
-  useAuthStore.subscribe((s) => { tokenRef.current = s.token; });
-  useChatStore.subscribe((s) => {
-    addMessageRef.current = s.addMessage;
-    setTypingRef.current = s.setTyping;
-    setUserOnlineRef.current = s.setUserOnline;
-    setUserOfflineRef.current = s.setUserOffline;
-  });
-
-  const connect = useCallback(() => {
-    const token = tokenRef.current;
-    if (!token) return;
-
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const msg: WSMessage = JSON.parse(event.data);
-        switch (msg.type) {
-          case 'new_message':
-            addMessageRef.current(msg.data as Message);
-            break;
-          case 'typing': {
-            const d = msg.data as { conversation_id: string; user_id: string };
-            setTypingRef.current(d.conversation_id, d.user_id);
-            break;
-          }
-          case 'user_online': {
-            const d = msg.data as { user_id: string };
-            setUserOnlineRef.current(d.user_id);
-            break;
-          }
-          case 'user_offline': {
-            const d = msg.data as { user_id: string };
-            setUserOfflineRef.current(d.user_id);
-            break;
-          }
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    };
-
-    ws.onclose = () => {
-      wsRef.current = null;
-      if (!mountedRef.current) return;
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = setTimeout(connect, 3000);
-    };
-
-    ws.onerror = () => {
-      // onclose will fire after onerror, reconnection handled there
-    };
-  }, []); // stable — uses refs
 
   useEffect(() => {
     mountedRef.current = true;
+    const token = useAuthStore.getState().token;
+    if (!token) return;
+
+    const addMessage = useChatStore.getState().addMessage;
+    const setTyping = useChatStore.getState().setTyping;
+    const setUserOnline = useChatStore.getState().setUserOnline;
+    const setUserOffline = useChatStore.getState().setUserOffline;
+
+    const connect = () => {
+      if (!mountedRef.current) return;
+
+      const currentToken = useAuthStore.getState().token;
+      if (!currentToken) return;
+
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${currentToken}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg: WSMessage = JSON.parse(event.data);
+          switch (msg.type) {
+            case 'new_message':
+              addMessage(msg.data as Message);
+              break;
+            case 'typing': {
+              const d = msg.data as { conversation_id: string; user_id: string };
+              setTyping(d.conversation_id, d.user_id);
+              break;
+            }
+            case 'user_online': {
+              const d = msg.data as { user_id: string };
+              setUserOnline(d.user_id);
+              break;
+            }
+            case 'user_offline': {
+              const d = msg.data as { user_id: string };
+              setUserOffline(d.user_id);
+              break;
+            }
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (!mountedRef.current) return;
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        // onclose fires after onerror, reconnection handled there
+      };
+    };
+
     connect();
+
     return () => {
       mountedRef.current = false;
       if (reconnectTimerRef.current) {
@@ -92,7 +89,7 @@ export function useWebSocket() {
         wsRef.current = null;
       }
     };
-  }, [connect]);
+  }, []); // empty deps — reads store via getState(), no reactive subscriptions
 
   const send = useCallback((type: string, data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

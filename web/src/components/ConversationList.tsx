@@ -13,7 +13,7 @@ export default function ConversationList() {
 
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+  }, []); // run once on mount
 
   const getDisplayName = (convo: Conversation) => {
     if (convo.type === 'group' && convo.group_id) return '群聊';
