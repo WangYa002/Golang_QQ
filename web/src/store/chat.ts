@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Conversation, Message } from '../types';
 import * as convoApi from '../api/conversations';
+import * as userApi from '../api/users';
 
 interface ChatState {
   conversations: Conversation[];
@@ -8,6 +9,7 @@ interface ChatState {
   messages: Record<string, Message[]>;
   typingUsers: Record<string, string[]>;
   onlineUsers: Record<string, boolean>;
+  userNames: Record<string, string>;
 
   fetchConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
@@ -15,6 +17,7 @@ interface ChatState {
   setTyping: (convoId: string, userId: string) => void;
   setUserOnline: (userId: string) => void;
   setUserOffline: (userId: string) => void;
+  fetchUserName: (userId: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -23,6 +26,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
   typingUsers: {},
   onlineUsers: {},
+  userNames: {},
 
   fetchConversations: async () => {
     const convos = await convoApi.getConversations();
@@ -80,5 +84,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { [userId]: _, ...rest } = s.onlineUsers;
       return { onlineUsers: rest };
     });
+  },
+
+  fetchUserName: async (userId) => {
+    if (get().userNames[userId]) return;
+    try {
+      const users = await userApi.searchUsers(userId);
+      const found = users.find((u) => u.id === userId);
+      if (found) {
+        set((s) => ({
+          userNames: { ...s.userNames, [userId]: found.nickname || found.username },
+        }));
+      }
+    } catch {
+      // ignore
+    }
   },
 }));

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
 import type { Conversation } from '../types';
+import * as userApi from '../api/users';
 
 export default function ConversationList() {
   const conversations = useChatStore((s) => s.conversations);
@@ -10,14 +11,28 @@ export default function ConversationList() {
   const fetchConversations = useChatStore((s) => s.fetchConversations);
   const user = useAuthStore((s) => s.user);
   const onlineUsers = useChatStore((s) => s.onlineUsers);
+  const userNames = useChatStore((s) => s.userNames);
+  const fetchUserName = useChatStore((s) => s.fetchUserName);
 
   useEffect(() => {
     fetchConversations();
   }, []); // run once on mount
 
+  useEffect(() => {
+    conversations.forEach((convo) => {
+      if (convo.type === 'private') {
+        const otherId = convo.members.find((m) => m !== user?.id);
+        if (otherId && !userNames[otherId]) {
+          fetchUserName(otherId);
+        }
+      }
+    });
+  }, [conversations]);
+
   const getDisplayName = (convo: Conversation) => {
     if (convo.type === 'group' && convo.group_id) return '群聊';
-    return '私聊';
+    const otherId = getOtherUserId(convo);
+    return userNames[otherId] || '私聊';
   };
 
   const getOtherUserId = (convo: Conversation) => {

@@ -99,6 +99,27 @@ func AddGroupMember(c *gin.Context) {
 		return
 	}
 
+	userID := middleware.GetUserID(c)
+
+	var group model.Group
+	err = model.Groups.FindOne(c, bson.M{"_id": groupID}).Decode(&group)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+		return
+	}
+
+	isOwner := false
+	for _, m := range group.Members {
+		if m.UserID == userID && (m.Role == "owner" || m.Role == "admin") {
+			isOwner = true
+			break
+		}
+	}
+	if !isOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only owner or admin can add members"})
+		return
+	}
+
 	var req AddMemberReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -138,6 +159,27 @@ func RemoveGroupMember(c *gin.Context) {
 	memberID, err := primitive.ObjectIDFromHex(c.Param("uid"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid uid"})
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+
+	var group model.Group
+	err = model.Groups.FindOne(c, bson.M{"_id": groupID}).Decode(&group)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+		return
+	}
+
+	isOwner := false
+	for _, m := range group.Members {
+		if m.UserID == userID && (m.Role == "owner" || m.Role == "admin") {
+			isOwner = true
+			break
+		}
+	}
+	if !isOwner && userID != memberID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only owner, admin, or self can remove member"})
 		return
 	}
 

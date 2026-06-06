@@ -35,5 +35,24 @@ func ConnectDB() {
 	Messages = DB.Collection("messages")
 	Groups = DB.Collection("groups")
 
+	createIndexes()
+
 	log.Println("MongoDB connected:", config.AppConfig.MongoDBName)
+}
+
+func createIndexes() {
+	Users.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"username": 1}, Options: options.Index().SetUnique(true)},
+	})
+	Conversations.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"members": 1}},
+		{Keys: map[string]int{"updated_at": -1}},
+		{Keys: map[string]int{"group_id": 1}},
+	})
+	Messages.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"conversation_id": 1, "created_at": -1}},
+	})
+	Groups.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"owner_id": 1}},
+	})
 }

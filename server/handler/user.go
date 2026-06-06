@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +61,7 @@ func SearchUsers(c *gin.Context) {
 		return
 	}
 
-	cursor, err := model.Users.Find(c, bson.M{"username": primitive.Regex{Pattern: q, Options: "i"}})
+	cursor, err := model.Users.Find(c, bson.M{"username": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
 		return

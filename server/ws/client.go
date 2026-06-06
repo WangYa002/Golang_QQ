@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
@@ -51,7 +52,7 @@ func (c *Client) ReadPump() {
 		c.Hub.Unregister <- c
 		c.Conn.Close()
 
-		model.Users.UpdateByID(nil, c.UserID, bson.M{
+		model.Users.UpdateByID(context.Background(), c.UserID, bson.M{
 			"$set": bson.M{"status": "offline", "updated_at": time.Now()},
 		})
 
@@ -135,6 +136,23 @@ func (c *Client) handleChat(data json.RawMessage) {
 		return
 	}
 
+	var convo model.Conversation
+	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
+	if err != nil {
+		return
+	}
+
+	isMember := false
+	for _, m := range convo.Members {
+		if m == c.UserID {
+			isMember = true
+			break
+		}
+	}
+	if !isMember {
+		return
+	}
+
 	msg := model.Message{
 		ID:             primitive.NewObjectID(),
 		ConversationID: convoID,
@@ -145,12 +163,12 @@ func (c *Client) handleChat(data json.RawMessage) {
 		CreatedAt:      time.Now(),
 	}
 
-	_, err = model.Messages.InsertOne(nil, msg)
+	_, err = model.Messages.InsertOne(context.Background(), msg)
 	if err != nil {
 		return
 	}
 
-	model.Conversations.UpdateByID(nil, convoID, bson.M{
+	model.Conversations.UpdateByID(context.Background(), convoID, bson.M{
 		"$set": bson.M{
 			"last_message": model.LastMessage{
 				Content:   chat.Content,
@@ -161,12 +179,6 @@ func (c *Client) handleChat(data json.RawMessage) {
 			"updated_at": time.Now(),
 		},
 	})
-
-	var convo model.Conversation
-	err = model.Conversations.FindOne(nil, bson.M{"_id": convoID}).Decode(&convo)
-	if err != nil {
-		return
-	}
 
 	c.Hub.Broadcast <- &BroadcastMsg{
 		TargetIDs: convo.Members,
@@ -187,7 +199,7 @@ func (c *Client) handleTyping(data json.RawMessage) {
 	}
 
 	var convo model.Conversation
-	err = model.Conversations.FindOne(nil, bson.M{"_id": convoID}).Decode(&convo)
+	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
 	if err != nil {
 		return
 	}
@@ -220,13 +232,13 @@ func (c *Client) handleRead(data json.RawMessage) {
 		return
 	}
 
-	model.Messages.UpdateByID(nil, msgID, bson.M{
+	model.Messages.UpdateByID(context.Background(), msgID, bson.M{
 		"$addToSet": bson.M{"read_by": c.UserID},
 	})
 
 	convoID, _ := primitive.ObjectIDFromHex(read.ConversationID)
 	var convo model.Conversation
-	err = model.Conversations.FindOne(nil, bson.M{"_id": convoID}).Decode(&convo)
+	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
 	if err != nil {
 		return
 	}

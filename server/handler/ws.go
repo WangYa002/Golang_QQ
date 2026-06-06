@@ -15,11 +15,21 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:  func(r *http.Request) bool { return true },
+	Subprotocols: []string{"access_token"},
 }
 
 func HandleWebSocket(c *gin.Context) {
-	tokenStr := c.Query("token")
+	tokenStr := ""
+	for _, sub := range websocket.Subprotocols(c.Request) {
+		if sub != "" {
+			tokenStr = sub
+			break
+		}
+	}
+	if tokenStr == "" {
+		tokenStr = c.Query("token")
+	}
 	if tokenStr == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "token required"})
 		return
@@ -46,7 +56,7 @@ func HandleWebSocket(c *gin.Context) {
 
 	ws.GlobalHub.Register <- client
 
-	model.Users.UpdateByID(nil, claims.UserID, bson.M{
+	model.Users.UpdateByID(c.Request.Context(), claims.UserID, bson.M{
 		"$set": bson.M{"status": "online", "updated_at": time.Now()},
 	})
 

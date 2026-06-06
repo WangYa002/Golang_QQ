@@ -41,9 +41,15 @@ func (h *Hub) Run() {
 			}
 
 		case msg := <-h.Broadcast:
-			for _, id := range msg.TargetIDs {
-				if client, ok := h.Clients[id]; ok {
+			if len(msg.TargetIDs) == 0 {
+				for _, client := range h.Clients {
 					client.Send <- msg
+				}
+			} else {
+				for _, id := range msg.TargetIDs {
+					if client, ok := h.Clients[id]; ok {
+						client.Send <- msg
+					}
 				}
 			}
 		}

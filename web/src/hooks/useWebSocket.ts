@@ -31,8 +31,8 @@ export function useWebSocket() {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws?token=${currentToken}`;
-      const ws = new WebSocket(wsUrl);
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl, [currentToken]);
       wsRef.current = ws;
 
       ws.onmessage = (event) => {
