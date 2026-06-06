@@ -34,7 +34,7 @@ export default function ConversationList() {
       <div className="flex-1 overflow-y-auto">
         {conversations.map((convo) => {
           const otherId = getOtherUserId(convo);
-          const isOnline = onlineUsers.has(otherId);
+          const isOnline = !!onlineUsers[otherId];
           const isActive = convo.id === currentConvoId;
 
           return (

@@ -7,7 +7,7 @@ interface ChatState {
   currentConvoId: string | null;
   messages: Record<string, Message[]>;
   typingUsers: Record<string, string[]>;
-  onlineUsers: Set<string>;
+  onlineUsers: Record<string, boolean>;
 
   fetchConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
@@ -22,7 +22,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   currentConvoId: null,
   messages: {},
   typingUsers: {},
-  onlineUsers: new Set(),
+  onlineUsers: {},
 
   fetchConversations: async () => {
     const convos = await convoApi.getConversations();
@@ -70,18 +70,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setUserOnline: (userId) => {
-    set((s) => {
-      const next = new Set(s.onlineUsers);
-      next.add(userId);
-      return { onlineUsers: next };
-    });
+    set((s) => ({
+      onlineUsers: { ...s.onlineUsers, [userId]: true },
+    }));
   },
 
   setUserOffline: (userId) => {
     set((s) => {
-      const next = new Set(s.onlineUsers);
-      next.delete(userId);
-      return { onlineUsers: next };
+      const { [userId]: _, ...rest } = s.onlineUsers;
+      return { onlineUsers: rest };
     });
   },
 }));
