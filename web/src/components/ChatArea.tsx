@@ -13,6 +13,7 @@ export default function ChatArea() {
   const typingUsers = currentConvoId ? (typingUserMap[currentConvoId] || []) : [];
   const conversations = useChatStore((s) => s.conversations);
   const user = useAuthStore((s) => s.user);
+  const userNames = useChatStore((s) => s.userNames);
   const { send } = useWebSocket();
 
   const [input, setInput] = useState('');
@@ -65,58 +66,169 @@ export default function ChatArea() {
 
   const renderMessageContent = (msg: Message) => {
     if (msg.type === 'image') {
-      return <img src={msg.content} alt="" className="max-w-xs max-h-60 rounded-lg" />;
+      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-xl" style={{ boxShadow: 'var(--shadow-sm)' }} />;
     }
     if (msg.type === 'file' && msg.metadata) {
       return (
-        <a href={msg.content} download={msg.metadata.file_name} className="underline" style={{ color: '#81c784' }}>
-          📎 {msg.metadata.file_name} ({(msg.metadata.file_size / 1024).toFixed(1)} KB)
+        <a href={msg.content} download={msg.metadata.file_name} className="inline-flex items-center gap-2 underline"
+          style={{ color: 'var(--accent-light)' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+          {msg.metadata.file_name} ({(msg.metadata.file_size / 1024).toFixed(1)} KB)
         </a>
       );
     }
     if (msg.type === 'system') {
-      return <span className="italic" style={{ color: 'var(--text-secondary)' }}>{msg.content}</span>;
+      return <span className="italic" style={{ color: 'var(--text-muted)' }}>{msg.content}</span>;
     }
-    return <span>{msg.content}</span>;
+    return <span style={{ lineHeight: 1.5 }}>{msg.content}</span>;
   };
 
+  const getConvoName = () => {
+    if (!currentConvo) return '';
+    if (currentConvo.type === 'group') return '群聊';
+    const otherId = currentConvo.members.find((m) => m !== user?.id);
+    return otherId ? (userNames[otherId] || '私聊') : '私聊';
+  };
+
+  const getOtherOnline = () => {
+    if (!currentConvo || currentConvo.type === 'group') return false;
+    const otherId = currentConvo.members.find((m) => m !== user?.id);
+    return otherId ? !!useChatStore.getState().onlineUsers[otherId] : false;
+  };
+
+  // 空状态
   if (!currentConvoId) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <p style={{ color: 'var(--text-secondary)' }}>选择一个会话开始聊天</p>
+      <div className="flex-1 flex flex-col items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+        <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6"
+          style={{ background: 'var(--bg-tertiary)' }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </div>
+        <p className="text-lg font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+          选择一个会话
+        </p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          开始你的对话
+        </p>
       </div>
     );
   }
 
   return (
     <div className="flex-1 flex flex-col" style={{ background: 'var(--bg-primary)' }}>
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h2 className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>
-          {currentConvo?.type === 'group' ? '群聊' : '私聊'}
-        </h2>
-        {typingUsers.length > 0 && (
-          <span className="ml-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            对方正在输入...
-          </span>
-        )}
+
+      {/* 顶栏 */}
+      <div className="px-6 py-3.5 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--border)', background: 'rgba(22, 22, 37, 0.5)', backdropFilter: 'blur(10px)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold"
+            style={{
+              background: currentConvo?.type === 'group'
+                ? 'linear-gradient(135deg, #e17055, #d63031)'
+                : 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
+              color: '#fff',
+            }}>
+            {currentConvo?.type === 'group' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            ) : getConvoName()[0]?.toUpperCase()}
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {getConvoName()}
+            </h2>
+            {typingUsers.length > 0 ? (
+              <span className="text-xs" style={{ color: 'var(--accent-light)', animation: 'pulse 1.5s infinite' }}>
+                正在输入...
+              </span>
+            ) : currentConvo?.type === 'private' && getOtherOnline() ? (
+              <span className="text-xs flex items-center gap-1" style={{ color: 'var(--success)' }}>
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
+                在线
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* 右侧操作 */}
+        <div className="flex items-center gap-1">
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            title="语音通话">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+          </button>
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            title="视频通话">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg) => {
+      {/* 消息区域 */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
+        {messages.map((msg, index) => {
           const isMine = msg.sender_id === user?.id;
+          const isSystem = msg.type === 'system';
+          const showAvatar = !isMine && !isSystem;
+
+          if (isSystem) {
+            return (
+              <div key={msg.id} className="flex justify-center py-2 animate-fade-in"
+                style={{ animationDelay: `${index * 20}ms` }}>
+                <span className="text-xs px-3 py-1 rounded-full"
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                  {msg.content}
+                </span>
+              </div>
+            );
+          }
+
           return (
-            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className="max-w-xs lg:max-w-md px-3 py-2 rounded-xl text-sm"
-                style={{
-                  background: isMine ? 'var(--accent)' : 'var(--bg-tertiary)',
-                  color: isMine ? '#c0e0c0' : 'var(--text-primary)',
-                }}
-              >
-                {renderMessageContent(msg)}
-                <div className="text-xs mt-1" style={{ color: isMine ? '#8ab88a' : 'var(--text-secondary)' }}>
+            <div key={msg.id}
+              className={`flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 py-1`}
+              style={{ animation: `${isMine ? 'slideInRight' : 'slideInLeft'} 0.25s ease forwards`, animationDelay: `${index * 15}ms` }}>
+
+              {/* 对方头像 */}
+              {showAvatar && (
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
+                  {getConvoName()[0]?.toUpperCase()}
+                </div>
+              )}
+
+              {/* 消息气泡 */}
+              <div className="max-w-[65%]">
+                <div
+                  className="px-4 py-2.5 text-sm"
+                  style={{
+                    background: isMine ? 'var(--bubble-mine)' : 'var(--bubble-other)',
+                    color: isMine ? '#fff' : 'var(--text-primary)',
+                    borderRadius: isMine
+                      ? '18px 18px 4px 18px'
+                      : '18px 18px 18px 4px',
+                    boxShadow: isMine ? '0 2px 12px rgba(108, 92, 231, 0.2)' : 'var(--shadow-sm)',
+                  }}
+                >
+                  {renderMessageContent(msg)}
+                </div>
+                <div className={`text-[10px] mt-1 ${isMine ? 'text-right' : 'text-left'}`}
+                  style={{ color: 'var(--text-muted)' }}>
                   {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
@@ -126,37 +238,57 @@ export default function ChatArea() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-3 flex gap-2 items-end" style={{ borderTop: '1px solid var(--border)' }}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={handleFileUpload}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="px-3 py-2 rounded-lg cursor-pointer"
-          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-        >
-          📎
-        </button>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入消息..."
-          className="flex-1 px-3 py-2 rounded-lg outline-none text-sm"
-          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-        />
-        <button
-          onClick={handleSend}
-          className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer"
-          style={{ background: 'var(--accent)', color: '#c0e0c0' }}
-        >
-          发送
-        </button>
+      {/* 输入区域 */}
+      <div className="px-6 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="flex items-end gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+            title="上传文件"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息..."
+              className="w-full px-4 py-2.5 rounded-xl outline-none text-sm"
+              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            />
+          </div>
+
+          <button
+            onClick={handleSend}
+            disabled={!input.trim()}
+            className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0"
+            style={{
+              background: input.trim() ? 'linear-gradient(135deg, var(--accent), var(--accent-dark))' : 'var(--bg-tertiary)',
+              color: input.trim() ? '#fff' : 'var(--text-muted)',
+              boxShadow: input.trim() ? '0 2px 10px rgba(108, 92, 231, 0.3)' : 'none',
+            }}
+            title="发送"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

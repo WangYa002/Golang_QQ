@@ -7,12 +7,14 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       if (isRegister) {
         await register(username, password, nickname);
@@ -21,74 +23,156 @@ export default function Login() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-      <div className="w-96 p-8 rounded-xl" style={{ background: 'var(--bg-secondary)' }}>
-        <h1 className="text-2xl font-bold text-center mb-6" style={{ color: 'var(--text-primary)' }}>
-          Golang QQ
-        </h1>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
+      style={{ background: 'var(--bg-primary)' }}>
 
+      {/* 背景装饰 */}
+      <div style={{
+        position: 'absolute', top: '-20%', left: '-10%',
+        width: 500, height: 500, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(108,92,231,0.12) 0%, transparent 70%)',
+        filter: 'blur(60px)',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-15%', right: '-5%',
+        width: 400, height: 400, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(0,210,160,0.08) 0%, transparent 70%)',
+        filter: 'blur(60px)',
+      }} />
+
+      {/* 登录卡片 */}
+      <div className="animate-fade-in relative z-10 w-[420px] p-10 rounded-2xl"
+        style={{
+          background: 'rgba(22, 22, 37, 0.85)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-lg), var(--shadow-glow)',
+        }}>
+
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+            style={{
+              background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
+              boxShadow: '0 4px 20px rgba(108, 92, 231, 0.35)',
+            }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            Golang QQ
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {isRegister ? '创建新账号' : '欢迎回来'}
+          </p>
+        </div>
+
+        {/* 错误提示 */}
         {error && (
-          <div className="mb-4 p-3 rounded-lg text-sm" style={{ background: '#5e3a3a', color: '#e0c0c0' }}>
+          <div className="animate-fade-in mb-5 p-3 rounded-xl text-sm flex items-center gap-2"
+            style={{ background: 'rgba(255,107,107,0.12)', color: 'var(--danger)', border: '1px solid rgba(255,107,107,0.2)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
             {error}
           </div>
         )}
 
+        {/* 表单 */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            placeholder="用户名"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg outline-none"
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-            required
-          />
-
-          {isRegister && (
+          <div>
+            <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
+              用户名
+            </label>
             <input
               type="text"
-              placeholder="昵称"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg outline-none"
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+              placeholder="请输入用户名"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl outline-none text-sm"
+              style={{
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+              }}
               required
             />
+          </div>
+
+          {isRegister && (
+            <div className="animate-fade-in">
+              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
+                昵称
+              </label>
+              <input
+                type="text"
+                placeholder="请输入昵称"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl outline-none text-sm"
+                style={{
+                  background: 'var(--bg-input)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border)',
+                }}
+                required
+              />
+            </div>
           )}
 
-          <input
-            type="password"
-            placeholder="密码"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg outline-none"
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-            required
-          />
+          <div>
+            <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
+              密码
+            </label>
+            <input
+              type="password"
+              placeholder="请输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl outline-none text-sm"
+              style={{
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+              }}
+              required
+            />
+          </div>
 
           <button
             type="submit"
-            className="w-full py-3 rounded-lg font-medium cursor-pointer"
-            style={{ background: 'var(--accent)', color: '#c0e0c0' }}
+            disabled={loading}
+            className="w-full py-3 rounded-xl font-medium cursor-pointer text-white text-sm"
+            style={{
+              background: loading
+                ? 'var(--accent-dark)'
+                : 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
+              boxShadow: loading ? 'none' : '0 4px 15px rgba(108, 92, 231, 0.4)',
+              opacity: loading ? 0.7 : 1,
+            }}
           >
-            {isRegister ? '注册' : '登录'}
+            {loading ? '处理中...' : isRegister ? '注 册' : '登 录'}
           </button>
         </form>
 
-        <p className="text-center mt-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        {/* 切换 */}
+        <div className="mt-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
           {isRegister ? '已有账号？' : '没有账号？'}
           <button
             onClick={() => { setIsRegister(!isRegister); setError(''); }}
-            className="ml-1 underline cursor-pointer"
-            style={{ color: '#81c784' }}
+            className="ml-1 cursor-pointer font-medium"
+            style={{ color: 'var(--accent-light)' }}
           >
             {isRegister ? '去登录' : '去注册'}
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );

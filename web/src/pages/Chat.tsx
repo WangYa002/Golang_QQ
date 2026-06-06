@@ -18,7 +18,7 @@ export default function Chat() {
   }, []);
 
   return (
-    <div className="h-screen flex" style={{ background: 'var(--bg-primary)' }}>
+    <div className="h-screen flex overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
       <Sidebar />
       <ConversationList />
       <ChatArea />
