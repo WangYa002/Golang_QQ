@@ -7,8 +7,10 @@ import type { Message } from '../types';
 
 export default function ChatArea() {
   const currentConvoId = useChatStore((s) => s.currentConvoId);
-  const messages = useChatStore((s) => s.currentConvoId ? (s.messages[s.currentConvoId] || []) : []);
-  const typingUsers = useChatStore((s) => s.currentConvoId ? (s.typingUsers[s.currentConvoId] || []) : []);
+  const messageMap = useChatStore((s) => s.messages);
+  const messages = currentConvoId ? (messageMap[currentConvoId] || []) : [];
+  const typingUserMap = useChatStore((s) => s.typingUsers);
+  const typingUsers = currentConvoId ? (typingUserMap[currentConvoId] || []) : [];
   const conversations = useChatStore((s) => s.conversations);
   const user = useAuthStore((s) => s.user);
   const { send } = useWebSocket();

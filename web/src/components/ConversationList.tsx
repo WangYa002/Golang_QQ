@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
 import type { Conversation } from '../types';
@@ -14,8 +14,12 @@ export default function ConversationList() {
   const userNames = useChatStore((s) => s.userNames);
   const fetchUserName = useChatStore((s) => s.fetchUserName);
 
+  const hasFetchedRef = useRef(false);
   useEffect(() => {
-    fetchConversations();
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchConversations();
+    }
   }, []); // run once on mount
 
   useEffect(() => {

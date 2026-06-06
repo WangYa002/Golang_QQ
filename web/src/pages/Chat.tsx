@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
 import Sidebar from '../components/Sidebar';
@@ -6,7 +6,11 @@ import ConversationList from '../components/ConversationList';
 import ChatArea from '../components/ChatArea';
 
 export default function Chat() {
+  const hasInitRef = useRef(false);
+
   useEffect(() => {
+    if (hasInitRef.current) return;
+    hasInitRef.current = true;
     if (!useAuthStore.getState().user) {
       useAuthStore.getState().fetchMe();
     }

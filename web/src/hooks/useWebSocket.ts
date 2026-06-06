@@ -6,12 +6,17 @@ import type { WSMessage, Message } from '../types';
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(false);
+  const unsubAuthRef = useRef<(() => void) | null>(null);
+
+  const send = useCallback((type: string, data: unknown) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, data }));
+    }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
-    const token = useAuthStore.getState().token;
-    if (!token) return;
 
     const addMessage = useChatStore.getState().addMessage;
     const setTyping = useChatStore.getState().setTyping;
@@ -31,8 +36,8 @@ export function useWebSocket() {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      const ws = new WebSocket(wsUrl, [currentToken]);
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${currentToken}`;
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onmessage = (event) => {
@@ -70,15 +75,27 @@ export function useWebSocket() {
         reconnectTimerRef.current = setTimeout(connect, 3000);
       };
 
-      ws.onerror = () => {
-        // onclose fires after onerror, reconnection handled there
-      };
+      ws.onerror = () => {};
     };
 
-    connect();
+    // Connect when token exists
+    const token = useAuthStore.getState().token;
+    if (token) connect();
+
+    // Reconnect when token changes (e.g. after login)
+    unsubAuthRef.current = useAuthStore.subscribe((state) => {
+      if (state.token && !wsRef.current) {
+        connect();
+      } else if (!state.token && wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    });
 
     return () => {
       mountedRef.current = false;
+      unsubAuthRef.current?.();
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -89,12 +106,6 @@ export function useWebSocket() {
         wsRef.current = null;
       }
     };
-  }, []); // empty deps — reads store via getState(), no reactive subscriptions
-
-  const send = useCallback((type: string, data: unknown) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, data }));
-    }
   }, []);
 
   return { send };
