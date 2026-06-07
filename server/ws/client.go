@@ -40,6 +40,11 @@ type ReadData struct {
 	MessageID      string `json:"message_id"`
 }
 
+type RecallData struct {
+	ConversationID string `json:"conversation_id"`
+	MessageID      string `json:"message_id"`
+}
+
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
@@ -90,6 +95,8 @@ func (c *Client) ReadPump() {
 			c.handleRead(msg.Data)
 		case "heartbeat":
 			c.Send <- &BroadcastMsg{Type: "heartbeat", Data: map[string]string{}}
+		case "message_recall":
+			c.handleRecall(msg.Data)
 		}
 	}
 }
@@ -250,6 +257,48 @@ func (c *Client) handleRead(data json.RawMessage) {
 			"conversation_id": read.ConversationID,
 			"message_id":      read.MessageID,
 			"user_id":         c.UserID.Hex(),
+		},
+	}
+}
+
+func (c *Client) handleRecall(data json.RawMessage) {
+	var recall RecallData
+	if err := json.Unmarshal(data, &recall); err != nil {
+		return
+	}
+
+	convoID, err := primitive.ObjectIDFromHex(recall.ConversationID)
+	if err != nil {
+		return
+	}
+	msgID, err := primitive.ObjectIDFromHex(recall.MessageID)
+	if err != nil {
+		return
+	}
+
+	var msg model.Message
+	err = model.Messages.FindOne(context.Background(), bson.M{"_id": msgID, "sender_id": c.UserID}).Decode(&msg)
+	if err != nil {
+		return
+	}
+
+	if time.Since(msg.CreatedAt) > 2*time.Minute {
+		return
+	}
+
+	model.Messages.UpdateByID(context.Background(), msgID, bson.M{
+		"$set": bson.M{"type": "recalled", "content": "该消息已撤回"},
+	})
+
+	var convo model.Conversation
+	model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
+
+	c.Hub.Broadcast <- &BroadcastMsg{
+		TargetIDs: convo.Members,
+		Type:      "message_recalled",
+		Data: map[string]string{
+			"conversation_id": recall.ConversationID,
+			"message_id":      recall.MessageID,
 		},
 	}
 }
