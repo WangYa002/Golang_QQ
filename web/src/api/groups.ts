@@ -1,5 +1,5 @@
 import { request } from './client';
-import type { Group } from '../types';
+import type { Group, GroupMemberWithUser } from '../types';
 
 export function createGroup(name: string, avatar: string, memberIds: string[]) {
   return request<{ group: Group; conversation: unknown }>('/groups', {
@@ -10,6 +10,17 @@ export function createGroup(name: string, avatar: string, memberIds: string[]) {
 
 export function getGroup(id: string) {
   return request<Group>(`/groups/${id}`);
+}
+
+export function updateGroup(id: string, data: { name?: string; announcement?: string }) {
+  return request(`/groups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function getGroupMembers(id: string) {
+  return request<GroupMemberWithUser[]>(`/groups/${id}/members`);
 }
 
 export function addGroupMember(groupId: string, userId: string) {

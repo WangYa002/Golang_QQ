@@ -15,3 +15,13 @@ export function createConversation(userId: string) {
 export function getMessages(conversationId: string, skip = 0) {
   return request<Message[]>(`/conversations/${conversationId}/messages?skip=${skip}`);
 }
+
+export function recallMessage(conversationId: string, messageId: string) {
+  return request(`/conversations/${conversationId}/messages/${messageId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function searchMessages(conversationId: string, query: string) {
+  return request<Message[]>(`/conversations/${conversationId}/messages/search?q=${encodeURIComponent(query)}`);
+}

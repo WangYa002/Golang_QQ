@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
+import { useFriendStore } from '../store/friend';
 import type { WSMessage, Message } from '../types';
 
 export function useWebSocket() {
@@ -60,6 +61,19 @@ export function useWebSocket() {
             case 'user_offline': {
               const d = msg.data as { user_id: string };
               setUserOffline(d.user_id);
+              break;
+            }
+            case 'friend_request': {
+              useFriendStore.getState().fetchRequests();
+              break;
+            }
+            case 'friend_accepted': {
+              useFriendStore.getState().fetchFriends();
+              break;
+            }
+            case 'message_recalled': {
+              const d = msg.data as { conversation_id: string; message_id: string };
+              useChatStore.getState().handleMessageRecalled(d.conversation_id, d.message_id);
               break;
             }
           }

@@ -26,6 +26,7 @@ interface ChatState {
   addGroupMember: (groupId: string, userId: string) => Promise<void>;
   leaveGroup: (groupId: string, userId: string) => Promise<void>;
   markAsRead: (convoId: string) => void;
+  handleMessageRecalled: (convoId: string, msgId: string) => void;
   getTotalUnread: () => number;
 }
 
@@ -171,6 +172,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const { [convoId]: _, ...rest } = s.unreadCount;
       return { unreadCount: rest };
+    });
+  },
+
+  handleMessageRecalled: (convoId, msgId) => {
+    set((s) => {
+      const msgs = s.messages[convoId];
+      if (!msgs) return s;
+      return {
+        messages: {
+          ...s.messages,
+          [convoId]: msgs.map((m) =>
+            m.id === msgId ? { ...m, type: 'system' as const, content: '该消息已撤回' } : m
+          ),
+        },
+      };
     });
   },
 

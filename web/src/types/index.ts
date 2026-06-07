@@ -3,6 +3,8 @@ export interface User {
   username: string;
   nickname: string;
   avatar: string;
+  bio: string;
+  email: string;
   status: 'online' | 'offline' | 'away';
 }
 
@@ -27,7 +29,7 @@ export interface Message {
   id: string;
   conversation_id: string;
   sender_id: string;
-  type: 'text' | 'image' | 'file' | 'system';
+  type: 'text' | 'image' | 'file' | 'system' | 'recalled';
   content: string;
   metadata?: MessageMetadata;
   read_by: string[];
@@ -48,6 +50,7 @@ export interface Group {
   owner_id: string;
   members: GroupMember[];
   max_members: number;
+  announcement: string;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +61,13 @@ export interface GroupMember {
   joined_at: string;
 }
 
+export interface GroupMemberWithUser {
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  user: User;
+}
+
 export interface WSMessage {
   type: string;
   data: unknown;
@@ -66,4 +76,20 @@ export interface WSMessage {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface FriendRequest {
+  id: string;
+  from_user: User;
+  to_user_id: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+}
+
+export interface Friend {
+  id: string;
+  user: User;
+  remark: string;
+  created_at: string;
 }
