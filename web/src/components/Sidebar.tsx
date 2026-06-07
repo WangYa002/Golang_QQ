@@ -1,27 +1,33 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
+import { useFriendStore } from '../store/friend';
 import * as userApi from '../api/users';
 import type { User } from '../types';
 
-export default function Sidebar() {
+interface Props {
+  activeTab: 'chat' | 'contacts';
+  onTabChange: (tab: 'chat' | 'contacts') => void;
+  onOpenProfile: (userId: string) => void;
+}
+
+export default function Sidebar({ activeTab, onTabChange, onOpenProfile }: Props) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const fetchConversations = useChatStore((s) => s.fetchConversations);
-  const createConvo = useChatStore((s) => s.selectConversation);
   const createGroup = useChatStore((s) => s.createGroup);
-  const getTotalUnread = useChatStore((s) => s.getTotalUnread);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const selectConversation = useChatStore((s) => s.selectConversation);
+  const totalUnread = useChatStore((s) => s.getTotalUnread)();
+  const pendingRequests = useFriendStore((s) => s.getPendingCount)();
+
   const [showSearch, setShowSearch] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
   const [groupName, setGroupName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [groupSearchResults, setGroupSearchResults] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<'chat' | 'contacts'>('chat');
-
-  const totalUnread = getTotalUnread();
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -33,7 +39,7 @@ export default function Sidebar() {
     const { createConversation } = await import('../api/conversations');
     const convo = await createConversation(userId);
     await fetchConversations();
-    createConvo(convo.id);
+    selectConversation(convo.id);
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
@@ -66,7 +72,7 @@ export default function Sidebar() {
       style={{ background: 'var(--bg-primary)', borderRight: '1px solid var(--border)' }}>
 
       {/* 用户头像 */}
-      <div className="relative group cursor-pointer mb-2">
+      <div className="relative group cursor-pointer mb-2" onClick={() => onOpenProfile(user?.id || '')}>
         <div
           className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold transition-transform group-hover:scale-105"
           style={{
@@ -81,12 +87,11 @@ export default function Sidebar() {
           style={{ background: 'var(--success)', borderColor: 'var(--bg-primary)' }} />
       </div>
 
-      {/* 分隔线 */}
       <div className="w-8 h-px my-1" style={{ background: 'var(--border)' }} />
 
-      {/* 聊天按钮 */}
+      {/* 消息 Tab */}
       <button
-        onClick={() => { fetchConversations(); setActiveTab('chat'); }}
+        onClick={() => { onTabChange('chat'); fetchConversations(); }}
         className="w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer relative"
         style={{
           background: activeTab === 'chat' ? 'var(--accent)' : 'transparent',
@@ -99,11 +104,34 @@ export default function Sidebar() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
-        {/* 未读总数 */}
         {totalUnread > 0 && activeTab !== 'chat' && (
           <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full flex items-center justify-center text-[9px] font-bold px-0.5"
             style={{ background: 'var(--danger)', color: '#fff' }}>
             {totalUnread > 99 ? '99+' : totalUnread}
+          </div>
+        )}
+      </button>
+
+      {/* 联系人 Tab */}
+      <button
+        onClick={() => onTabChange('contacts')}
+        className="w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer relative"
+        style={{
+          background: activeTab === 'contacts' ? 'var(--accent)' : 'transparent',
+          color: activeTab === 'contacts' ? '#fff' : 'var(--text-secondary)',
+        }}
+        onMouseEnter={(e) => { if (activeTab !== 'contacts') e.currentTarget.style.background = 'var(--bg-hover)'; }}
+        onMouseLeave={(e) => { if (activeTab !== 'contacts') e.currentTarget.style.background = 'transparent'; }}
+        title="联系人"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        {pendingRequests > 0 && activeTab !== 'contacts' && (
+          <div className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full flex items-center justify-center text-[9px] font-bold px-0.5"
+            style={{ background: 'var(--danger)', color: '#fff' }}>
+            {pendingRequests}
           </div>
         )}
       </button>
@@ -142,24 +170,9 @@ export default function Sidebar() {
         </svg>
       </button>
 
-      {/* 弹性空间 */}
       <div className="flex-1" />
 
-      {/* 设置按钮 */}
-      <button
-        className="w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer"
-        style={{ color: 'var(--text-muted)' }}
-        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-        title="设置"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
-
-      {/* 退出按钮 */}
+      {/* 退出 */}
       <button
         onClick={logout}
         className="w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer"
@@ -196,7 +209,6 @@ export default function Sidebar() {
                 </svg>
               </button>
             </div>
-
             <div className="flex gap-2 mb-4">
               <input
                 type="text"
@@ -216,7 +228,6 @@ export default function Sidebar() {
                 搜索
               </button>
             </div>
-
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {searchResults.map((u) => (
                 <div key={u.id} className="flex items-center justify-between p-3 rounded-xl"
@@ -268,12 +279,8 @@ export default function Sidebar() {
                 </svg>
               </button>
             </div>
-
-            {/* 群名输入 */}
             <div className="mb-4">
-              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                群名称
-              </label>
+              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>群名称</label>
               <input
                 type="text"
                 placeholder="请输入群名称"
@@ -283,12 +290,8 @@ export default function Sidebar() {
                 style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
               />
             </div>
-
-            {/* 搜索添加成员 */}
             <div className="mb-4">
-              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                添加成员
-              </label>
+              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>添加成员</label>
               <div className="flex gap-2 mb-3">
                 <input
                   type="text"
@@ -303,12 +306,8 @@ export default function Sidebar() {
                   onClick={handleGroupSearch}
                   className="px-3 py-2 rounded-xl text-sm cursor-pointer"
                   style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-                >
-                  搜索
-                </button>
+                >搜索</button>
               </div>
-
-              {/* 已选成员 */}
               {selectedMembers.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {selectedMembers.map((id) => (
@@ -324,8 +323,6 @@ export default function Sidebar() {
                   ))}
                 </div>
               )}
-
-              {/* 搜索结果 */}
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {groupSearchResults.map((u) => {
                   const isSelected = selectedMembers.includes(u.id);
@@ -339,9 +336,7 @@ export default function Sidebar() {
                           style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
                           {u.nickname?.[0] || u.username[0]}
                         </div>
-                        <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                          {u.nickname || u.username}
-                        </span>
+                        <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{u.nickname || u.username}</span>
                       </div>
                       {isSelected && (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5">
@@ -353,8 +348,6 @@ export default function Sidebar() {
                 })}
               </div>
             </div>
-
-            {/* 创建按钮 */}
             <button
               onClick={handleCreateGroup}
               disabled={!groupName.trim() || selectedMembers.length === 0}
@@ -364,7 +357,6 @@ export default function Sidebar() {
                   ? 'linear-gradient(135deg, var(--accent), var(--accent-dark))'
                   : 'var(--bg-tertiary)',
                 color: groupName.trim() && selectedMembers.length > 0 ? '#fff' : 'var(--text-muted)',
-                boxShadow: groupName.trim() && selectedMembers.length > 0 ? '0 4px 15px rgba(108, 92, 231, 0.4)' : 'none',
               }}
             >
               创建群聊 ({selectedMembers.length} 人)
