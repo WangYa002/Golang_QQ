@@ -12,17 +12,21 @@ type User struct {
 	Password  string             `bson:"password" json:"-"`
 	Nickname  string             `bson:"nickname" json:"nickname"`
 	Avatar    string             `bson:"avatar" json:"avatar"`
+	Bio       string             `bson:"bio" json:"bio"`
+	Email     string             `bson:"email" json:"email"`
 	Status    string             `bson:"status" json:"status"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
 type UserPublic struct {
-	ID       primitive.ObjectID `json:"id"`
-	Username string             `json:"username"`
-	Nickname string             `json:"nickname"`
-	Avatar   string             `json:"avatar"`
-	Status   string             `json:"status"`
+	ID        primitive.ObjectID `json:"id"`
+	Username  string             `json:"username"`
+	Nickname  string             `json:"nickname"`
+	Avatar    string             `json:"avatar"`
+	Bio       string             `json:"bio"`
+	Email     string             `json:"email"`
+	Status    string             `json:"status"`
 }
 
 func (u *User) ToPublic() UserPublic {
@@ -31,6 +35,8 @@ func (u *User) ToPublic() UserPublic {
 		Username: u.Username,
 		Nickname: u.Nickname,
 		Avatar:   u.Avatar,
+		Bio:      u.Bio,
+		Email:    u.Email,
 		Status:   u.Status,
 	}
 }

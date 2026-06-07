@@ -11,11 +11,13 @@ import (
 )
 
 var (
-	DB            *mongo.Database
-	Users         *mongo.Collection
-	Conversations *mongo.Collection
-	Messages      *mongo.Collection
-	Groups        *mongo.Collection
+	DB             *mongo.Database
+	Users          *mongo.Collection
+	Conversations  *mongo.Collection
+	Messages       *mongo.Collection
+	Groups         *mongo.Collection
+	FriendRequests *mongo.Collection
+	Friends        *mongo.Collection
 )
 
 func ConnectDB() {
@@ -34,6 +36,8 @@ func ConnectDB() {
 	Conversations = DB.Collection("conversations")
 	Messages = DB.Collection("messages")
 	Groups = DB.Collection("groups")
+	FriendRequests = DB.Collection("friend_requests")
+	Friends = DB.Collection("friends")
 
 	createIndexes()
 
@@ -54,5 +58,12 @@ func createIndexes() {
 	})
 	Groups.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
 		{Keys: map[string]int{"owner_id": 1}},
+	})
+	FriendRequests.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"from_user_id": 1, "to_user_id": 1}, Options: options.Index().SetUnique(true)},
+		{Keys: map[string]int{"to_user_id": 1, "status": 1}},
+	})
+	Friends.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{Keys: map[string]int{"user_id": 1, "friend_id": 1}, Options: options.Index().SetUnique(true)},
 	})
 }
