@@ -24,9 +24,27 @@ func GetMe(c *gin.Context) {
 	c.JSON(http.StatusOK, user.ToPublic())
 }
 
+func GetUser(c *gin.Context) {
+	userID, err := primitive.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var user model.User
+	err = model.Users.FindOne(c, bson.M{"_id": userID}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	c.JSON(http.StatusOK, user.ToPublic())
+}
+
 type UpdateMeReq struct {
 	Nickname string `json:"nickname"`
 	Avatar   string `json:"avatar"`
+	Bio      string `json:"bio"`
+	Email    string `json:"email"`
 }
 
 func UpdateMe(c *gin.Context) {
@@ -43,6 +61,12 @@ func UpdateMe(c *gin.Context) {
 	}
 	if req.Avatar != "" {
 		update["avatar"] = req.Avatar
+	}
+	if req.Bio != "" {
+		update["bio"] = req.Bio
+	}
+	if req.Email != "" {
+		update["email"] = req.Email
 	}
 
 	_, err := model.Users.UpdateByID(c, userID, bson.M{"$set": update})

@@ -198,3 +198,95 @@ func RemoveGroupMember(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "member removed"})
 }
+
+type UpdateGroupReq struct {
+	Name         string `json:"name"`
+	Announcement string `json:"announcement"`
+}
+
+func UpdateGroup(c *gin.Context) {
+	groupID, err := primitive.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+
+	var group model.Group
+	err = model.Groups.FindOne(c, bson.M{"_id": groupID}).Decode(&group)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+		return
+	}
+
+	isOwnerOrAdmin := false
+	for _, m := range group.Members {
+		if m.UserID == userID && (m.Role == "owner" || m.Role == "admin") {
+			isOwnerOrAdmin = true
+			break
+		}
+	}
+	if !isOwnerOrAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only owner or admin can update"})
+		return
+	}
+
+	var req UpdateGroupReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	update := bson.M{"updated_at": time.Now()}
+	if req.Name != "" {
+		update["name"] = req.Name
+	}
+	if req.Announcement != "" {
+		update["announcement"] = req.Announcement
+	}
+
+	_, err = model.Groups.UpdateByID(c, groupID, bson.M{"$set": update})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+}
+
+func GetGroupMembers(c *gin.Context) {
+	groupID, err := primitive.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var group model.Group
+	err = model.Groups.FindOne(c, bson.M{"_id": groupID}).Decode(&group)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+		return
+	}
+
+	type MemberWithUser struct {
+		UserID   primitive.ObjectID `json:"user_id"`
+		Role     string             `json:"role"`
+		JoinedAt time.Time          `json:"joined_at"`
+		User     model.UserPublic   `json:"user"`
+	}
+
+	members := make([]MemberWithUser, 0, len(group.Members))
+	for _, m := range group.Members {
+		var user model.User
+		model.Users.FindOne(c, bson.M{"_id": m.UserID}).Decode(&user)
+		members = append(members, MemberWithUser{
+			UserID:   m.UserID,
+			Role:     m.Role,
+			JoinedAt: m.JoinedAt,
+			User:     user.ToPublic(),
+		})
+	}
+
+	c.JSON(http.StatusOK, members)
+}

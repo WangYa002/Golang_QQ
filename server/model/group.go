@@ -12,8 +12,9 @@ type Group struct {
 	Avatar     string             `bson:"avatar" json:"avatar"`
 	OwnerID    primitive.ObjectID `bson:"owner_id" json:"owner_id"`
 	Members    []GroupMember      `bson:"members" json:"members"`
-	MaxMembers int                `bson:"max_members" json:"max_members"`
-	CreatedAt  time.Time          `bson:"created_at" json:"created_at"`
+	MaxMembers   int                `bson:"max_members" json:"max_members"`
+	Announcement string             `bson:"announcement" json:"announcement"`
+	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt  time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
