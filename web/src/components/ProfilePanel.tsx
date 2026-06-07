@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUser, getMe, updateMe } from '../api/users';
+import { getUser, updateMe } from '../api/users';
 import { uploadFile } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { createConversation } from '../api/conversations';

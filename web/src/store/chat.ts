@@ -138,8 +138,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   createGroup: async (name, memberIds) => {
     const res = await groupApi.createGroup(name, '', memberIds);
     await get().fetchConversations();
-    if (res.conversation?.id) {
-      get().selectConversation(res.conversation.id);
+    const convo = res.conversation as { id?: string } | undefined;
+    if (convo?.id) {
+      get().selectConversation(convo.id);
     }
   },
 
