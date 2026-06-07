@@ -13,15 +13,55 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 32, color: '#e57373', fontFamily: 'sans-serif' }}>
-          <h2>页面出错了</h2>
-          <pre style={{ fontSize: 12, color: '#aaa', whiteSpace: 'pre-wrap' }}>{this.state.error?.message}</pre>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            style={{ marginTop: 16, padding: '8px 16px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-          >
-            重试
-          </button>
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-primary)',
+          fontFamily: 'sans-serif',
+        }}>
+          <div style={{
+            textAlign: 'center',
+            padding: 48,
+            maxWidth: 420,
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 20,
+              background: 'rgba(255,107,107,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 20px',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h2 style={{ color: 'var(--text-primary)', fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+              页面出错了
+            </h2>
+            <pre style={{
+              fontSize: 12, color: 'var(--text-secondary)',
+              whiteSpace: 'pre-wrap', marginBottom: 20,
+              background: 'var(--bg-tertiary)', padding: 12,
+              borderRadius: 12, textAlign: 'left',
+            }}>
+              {this.state.error?.message}
+            </pre>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              style={{
+                padding: '10px 24px',
+                background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
+                color: '#fff', border: 'none', borderRadius: 12,
+                cursor: 'pointer', fontSize: 14, fontWeight: 500,
+                boxShadow: '0 4px 15px rgba(108, 92, 231, 0.4)',
+              }}
+            >
+              重试
+            </button>
+          </div>
         </div>
       );
     }

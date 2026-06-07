@@ -5,6 +5,35 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { uploadFile } from '../api/client';
 import type { Message } from '../types';
 
+// 判断两条消息是否需要时间分隔线（间隔超过5分钟）
+function shouldShowTimeSeparator(prev: Message | null, curr: Message): boolean {
+  if (!prev) return true;
+  const diff = new Date(curr.created_at).getTime() - new Date(prev.created_at).getTime();
+  return diff > 5 * 60 * 1000;
+}
+
+// 判断两条消息是否来自同一发送者（连续消息合并）
+function isSameSender(prev: Message | null, curr: Message): boolean {
+  if (!prev) return false;
+  return prev.sender_id === curr.sender_id &&
+    (new Date(curr.created_at).getTime() - new Date(prev.created_at).getTime()) < 2 * 60 * 1000;
+}
+
+function formatTimeSeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+  if (isToday) return time;
+  if (isYesterday) return `昨天 ${time}`;
+  return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+}
+
 export default function ChatArea() {
   const currentConvoId = useChatStore((s) => s.currentConvoId);
   const messageMap = useChatStore((s) => s.messages);
@@ -14,6 +43,8 @@ export default function ChatArea() {
   const conversations = useChatStore((s) => s.conversations);
   const user = useAuthStore((s) => s.user);
   const userNames = useChatStore((s) => s.userNames);
+  const groupDetails = useChatStore((s) => s.groupDetails);
+  const fetchGroupDetails = useChatStore((s) => s.fetchGroupDetails);
   const { send } = useWebSocket();
 
   const [input, setInput] = useState('');
@@ -25,6 +56,13 @@ export default function ChatArea() {
   }, [messages]);
 
   const currentConvo = conversations.find((c) => c.id === currentConvoId);
+
+  // 加载群聊详情
+  useEffect(() => {
+    if (currentConvo?.type === 'group' && currentConvo.group_id) {
+      fetchGroupDetails(currentConvo.group_id);
+    }
+  }, [currentConvo?.group_id]);
 
   const handleSend = () => {
     if (!input.trim() || !currentConvoId) return;
@@ -66,7 +104,7 @@ export default function ChatArea() {
 
   const renderMessageContent = (msg: Message) => {
     if (msg.type === 'image') {
-      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-xl" style={{ boxShadow: 'var(--shadow-sm)' }} />;
+      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-xl cursor-pointer" style={{ boxShadow: 'var(--shadow-sm)' }} />;
     }
     if (msg.type === 'file' && msg.metadata) {
       return (
@@ -82,14 +120,28 @@ export default function ChatArea() {
     if (msg.type === 'system') {
       return <span className="italic" style={{ color: 'var(--text-muted)' }}>{msg.content}</span>;
     }
-    return <span style={{ lineHeight: 1.5 }}>{msg.content}</span>;
+    return <span style={{ lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{msg.content}</span>;
   };
 
   const getConvoName = () => {
     if (!currentConvo) return '';
-    if (currentConvo.type === 'group') return '群聊';
+    if (currentConvo.type === 'group') {
+      if (currentConvo.group_id && groupDetails[currentConvo.group_id]) {
+        return groupDetails[currentConvo.group_id].name;
+      }
+      return '群聊';
+    }
     const otherId = currentConvo.members.find((m) => m !== user?.id);
     return otherId ? (userNames[otherId] || '私聊') : '私聊';
+  };
+
+  const getConvoSubtitle = () => {
+    if (!currentConvo) return '';
+    if (currentConvo.type === 'group' && currentConvo.group_id) {
+      const group = groupDetails[currentConvo.group_id];
+      if (group) return `${group.members.length} 位成员`;
+    }
+    return '';
   };
 
   const getOtherOnline = () => {
@@ -152,6 +204,10 @@ export default function ChatArea() {
                 <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
                 在线
               </span>
+            ) : getConvoSubtitle() ? (
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {getConvoSubtitle()}
+              </span>
             ) : null}
           </div>
         </div>
@@ -181,57 +237,75 @@ export default function ChatArea() {
       </div>
 
       {/* 消息区域 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         {messages.map((msg, index) => {
           const isMine = msg.sender_id === user?.id;
           const isSystem = msg.type === 'system';
-          const showAvatar = !isMine && !isSystem;
-
-          if (isSystem) {
-            return (
-              <div key={msg.id} className="flex justify-center py-2 animate-fade-in"
-                style={{ animationDelay: `${index * 20}ms` }}>
-                <span className="text-xs px-3 py-1 rounded-full"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
-                  {msg.content}
-                </span>
-              </div>
-            );
-          }
+          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const showTimeSep = shouldShowTimeSeparator(prevMsg, msg);
+          const sameSender = isSameSender(prevMsg, msg);
+          const showAvatar = !isMine && !isSystem && !sameSender;
 
           return (
-            <div key={msg.id}
-              className={`flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 py-1`}
-              style={{ animation: `${isMine ? 'slideInRight' : 'slideInLeft'} 0.25s ease forwards`, animationDelay: `${index * 15}ms` }}>
-
-              {/* 对方头像 */}
-              {showAvatar && (
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
-                  {getConvoName()[0]?.toUpperCase()}
+            <div key={msg.id}>
+              {/* 时间分隔线 */}
+              {showTimeSep && (
+                <div className="flex items-center justify-center py-3">
+                  <span className="text-[11px] px-3 py-1 rounded-full"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                    {formatTimeSeparator(msg.created_at)}
+                  </span>
                 </div>
               )}
 
-              {/* 消息气泡 */}
-              <div className="max-w-[65%]">
-                <div
-                  className="px-4 py-2.5 text-sm"
-                  style={{
-                    background: isMine ? 'var(--bubble-mine)' : 'var(--bubble-other)',
-                    color: isMine ? '#fff' : 'var(--text-primary)',
-                    borderRadius: isMine
-                      ? '18px 18px 4px 18px'
-                      : '18px 18px 18px 4px',
-                    boxShadow: isMine ? '0 2px 12px rgba(108, 92, 231, 0.2)' : 'var(--shadow-sm)',
-                  }}
-                >
-                  {renderMessageContent(msg)}
+              {/* 系统消息 */}
+              {isSystem && (
+                <div className="flex justify-center py-1">
+                  <span className="text-xs px-3 py-1 rounded-full"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                    {msg.content}
+                  </span>
                 </div>
-                <div className={`text-[10px] mt-1 ${isMine ? 'text-right' : 'text-left'}`}
-                  style={{ color: 'var(--text-muted)' }}>
-                  {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              )}
+
+              {/* 普通消息 */}
+              {!isSystem && (
+                <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 ${sameSender ? 'mt-0.5' : 'mt-2'}`}>
+                  {/* 对方头像 */}
+                  {showAvatar ? (
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
+                      {getConvoName()[0]?.toUpperCase()}
+                    </div>
+                  ) : !isMine ? (
+                    <div className="w-8 flex-shrink-0" />
+                  ) : null}
+
+                  {/* 消息气泡 */}
+                  <div className="max-w-[65%]">
+                    <div
+                      className={`px-4 py-2.5 text-sm ${sameSender && !isMine ? '' : ''}`}
+                      style={{
+                        background: isMine ? 'var(--bubble-mine)' : 'var(--bubble-other)',
+                        color: isMine ? '#fff' : 'var(--text-primary)',
+                        borderRadius: isMine
+                          ? (sameSender ? '18px 4px 4px 18px' : '18px 18px 4px 18px')
+                          : (sameSender ? '4px 18px 18px 4px' : '18px 18px 18px 4px'),
+                        boxShadow: isMine ? '0 2px 12px rgba(108, 92, 231, 0.2)' : 'var(--shadow-sm)',
+                      }}
+                    >
+                      {renderMessageContent(msg)}
+                    </div>
+                    {/* 最后一条消息显示时间 */}
+                    {(index === messages.length - 1 || !isSameSender(msg, messages[index + 1] || null)) && (
+                      <div className={`text-[10px] mt-1 ${isMine ? 'text-right' : 'text-left'}`}
+                        style={{ color: 'var(--text-muted)' }}>
+                        {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}

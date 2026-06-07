@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
 import type { Conversation } from '../types';
-import * as userApi from '../api/users';
 
 export default function ConversationList() {
   const conversations = useChatStore((s) => s.conversations);
@@ -13,6 +12,9 @@ export default function ConversationList() {
   const onlineUsers = useChatStore((s) => s.onlineUsers);
   const userNames = useChatStore((s) => s.userNames);
   const fetchUserName = useChatStore((s) => s.fetchUserName);
+  const groupDetails = useChatStore((s) => s.groupDetails);
+  const fetchGroupDetails = useChatStore((s) => s.fetchGroupDetails);
+  const unreadCount = useChatStore((s) => s.unreadCount);
 
   const [filter, setFilter] = useState('');
 
@@ -31,12 +33,19 @@ export default function ConversationList() {
         if (otherId && !userNames[otherId]) {
           fetchUserName(otherId);
         }
+      } else if (convo.type === 'group' && convo.group_id) {
+        if (!groupDetails[convo.group_id]) {
+          fetchGroupDetails(convo.group_id);
+        }
       }
     });
   }, [conversations]);
 
   const getDisplayName = (convo: Conversation) => {
-    if (convo.type === 'group' && convo.group_id) return '群聊';
+    if (convo.type === 'group' && convo.group_id) {
+      const group = groupDetails[convo.group_id];
+      return group?.name || '群聊';
+    }
     const otherId = getOtherUserId(convo);
     return userNames[otherId] || '私聊';
   };
@@ -84,24 +93,30 @@ export default function ConversationList() {
 
       {/* 会话列表 */}
       <div className="flex-1 overflow-y-auto px-2">
-        {filteredConversations.map((convo, index) => {
+        {filteredConversations.map((convo) => {
           const otherId = getOtherUserId(convo);
           const isOnline = !!onlineUsers[otherId];
           const isActive = convo.id === currentConvoId;
           const displayName = getDisplayName(convo);
+          const unread = unreadCount[convo.id] || 0;
 
           return (
             <div
               key={convo.id}
               onClick={() => selectConversation(convo.id)}
-              className="animate-fade-in flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer mb-0.5"
+              className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer mb-0.5 relative"
               style={{
                 background: isActive ? 'var(--bg-active)' : 'transparent',
-                animationDelay: `${index * 30}ms`,
               }}
               onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
               onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
             >
+              {/* 选中指示条 */}
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-8 rounded-r-full"
+                  style={{ background: 'var(--accent)' }} />
+              )}
+
               {/* 头像 */}
               <div className="relative flex-shrink-0">
                 <div
@@ -130,6 +145,13 @@ export default function ConversationList() {
                       borderColor: isActive ? 'var(--bg-active)' : 'var(--bg-secondary)',
                     }} />
                 )}
+                {/* 未读徽章 */}
+                {unread > 0 && (
+                  <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold px-1"
+                    style={{ background: 'var(--danger)', color: '#fff' }}>
+                    {unread > 99 ? '99+' : unread}
+                  </div>
+                )}
               </div>
 
               {/* 信息 */}
@@ -139,23 +161,20 @@ export default function ConversationList() {
                     {displayName}
                   </span>
                   {convo.last_message && (
-                    <span className="text-[11px] flex-shrink-0 ml-2" style={{ color: 'var(--text-muted)' }}>
+                    <span className="text-[11px] flex-shrink-0 ml-2" style={{ color: unread > 0 ? 'var(--accent-light)' : 'var(--text-muted)' }}>
                       {new Date(convo.last_message.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
-                {convo.last_message && (
-                  <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                    {convo.last_message.content}
-                  </p>
-                )}
+                <div className="flex items-center justify-between">
+                  {convo.last_message && (
+                    <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'font-medium' : ''}`}
+                      style={{ color: unread > 0 ? 'var(--text-primary)' : 'var(--text-secondary)', maxWidth: unread > 0 ? '180px' : '100%' }}>
+                      {convo.last_message.content}
+                    </p>
+                  )}
+                </div>
               </div>
-
-              {/* 选中指示器 */}
-              {isActive && (
-                <div className="absolute left-0 w-[3px] h-8 rounded-r-full"
-                  style={{ background: 'var(--accent)' }} />
-              )}
             </div>
           );
         })}
