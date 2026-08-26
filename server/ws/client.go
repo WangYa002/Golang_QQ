@@ -45,11 +45,26 @@ type RecallData struct {
 	MessageID      string `json:"message_id"`
 }
 
+type CallData struct {
+	ConversationID string `json:"conversation_id"`
+	CallType       string `json:"call_type"`
+}
+
+type CallEventData struct {
+	ConversationID string          `json:"conversation_id"`
+	CallID         string          `json:"call_id"`
+	Kind           string          `json:"kind"` // accept | reject | hangup | signal
+	Reason         string          `json:"reason"`
+	Signal         json.RawMessage `json:"signal"`
+}
+
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	// WebRTC SDP（视频通话 offer/answer 可达 6KB+）会超过默认 4KB 限制，
+	// 超限后 gorilla/websocket 会直接关闭连接，导致信令丢失。放宽到 1MB。
+	maxMessageSize = 1 << 20
 )
 
 func (c *Client) ReadPump() {
@@ -97,6 +112,10 @@ func (c *Client) ReadPump() {
 			c.Send <- &BroadcastMsg{Type: "heartbeat", Data: map[string]string{}}
 		case "message_recall":
 			c.handleRecall(msg.Data)
+		case "call":
+			c.handleCall(msg.Data)
+		case "call_event":
+			c.handleCallEvent(msg.Data)
 		}
 	}
 }
@@ -299,6 +318,112 @@ func (c *Client) handleRecall(data json.RawMessage) {
 		Data: map[string]string{
 			"conversation_id": recall.ConversationID,
 			"message_id":      recall.MessageID,
+		},
+	}
+}
+
+// handleCall 发起通话：向会话中的其他成员广播 call_incoming
+func (c *Client) handleCall(data json.RawMessage) {
+	var call CallData
+	if err := json.Unmarshal(data, &call); err != nil {
+		return
+	}
+	if call.CallType != "voice" && call.CallType != "video" {
+		return
+	}
+
+	convoID, err := primitive.ObjectIDFromHex(call.ConversationID)
+	if err != nil {
+		return
+	}
+
+	var convo model.Conversation
+	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
+	if err != nil {
+		return
+	}
+
+	isMember := false
+	targets := make([]primitive.ObjectID, 0)
+	for _, m := range convo.Members {
+		if m == c.UserID {
+			isMember = true
+		} else {
+			targets = append(targets, m)
+		}
+	}
+	if !isMember || len(targets) == 0 {
+		return
+	}
+
+	var fromUser model.User
+	model.Users.FindOne(context.Background(), bson.M{"_id": c.UserID}).Decode(&fromUser)
+
+	callID := primitive.NewObjectID().Hex()
+	c.Hub.Broadcast <- &BroadcastMsg{
+		TargetIDs: targets,
+		Type:      "call_incoming",
+		Data: map[string]interface{}{
+			"call_id":         callID,
+			"conversation_id": call.ConversationID,
+			"call_type":       call.CallType,
+			"from_user_id":    c.UserID.Hex(),
+			"from_user":       fromUser.ToPublic(),
+		},
+	}
+}
+
+// handleCallEvent 通话过程中的事件中继：accept / reject / hangup / signal
+func (c *Client) handleCallEvent(data json.RawMessage) {
+	var evt CallEventData
+	if err := json.Unmarshal(data, &evt); err != nil {
+		return
+	}
+
+	convoID, err := primitive.ObjectIDFromHex(evt.ConversationID)
+	if err != nil {
+		return
+	}
+
+	var convo model.Conversation
+	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
+	if err != nil {
+		return
+	}
+
+	targets := make([]primitive.ObjectID, 0)
+	for _, m := range convo.Members {
+		if m != c.UserID {
+			targets = append(targets, m)
+		}
+	}
+	if len(targets) == 0 {
+		return
+	}
+
+	var msgType string
+	switch evt.Kind {
+	case "accept":
+		msgType = "call_accepted"
+	case "reject":
+		msgType = "call_rejected"
+	case "hangup":
+		msgType = "call_ended"
+	case "signal":
+		msgType = "call_signal"
+	default:
+		return
+	}
+
+	c.Hub.Broadcast <- &BroadcastMsg{
+		TargetIDs: targets,
+		Type:      msgType,
+		Data: map[string]interface{}{
+			"call_id":         evt.CallID,
+			"conversation_id": evt.ConversationID,
+			"reason":          evt.Reason,
+			"signal":          evt.Signal,
+			"user_id":         c.UserID.Hex(),
 		},
 	}
 }

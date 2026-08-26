@@ -85,12 +85,8 @@ export default function ConversationList() {
   const groupCount = conversations.filter((c) => c.type === 'group').length;
 
   return (
-    <div className="flex flex-col"
-      style={{
-        width: 300,
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border)',
-      }}>
+    <div className="conversation-pane flex flex-col"
+      style={{ background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)' }}>
 
       {/* 头部：标题 + 搜索 */}
       <div style={{ padding: '20px 20px 0' }}>
@@ -113,7 +109,7 @@ export default function ConversationList() {
       </div>
 
       {/* Tab 切换 */}
-      <div className="flex gap-5 px-5" style={{ borderBottom: '1px solid var(--border)' }}>
+      <div className="flex gap-6 px-5" style={{ borderBottom: '1px solid var(--border)' }}>
         {([
           { key: 'all', label: '全部' },
           { key: 'private', label: '私聊', count: privateCount },
@@ -122,16 +118,11 @@ export default function ConversationList() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="relative py-3 text-sm font-medium cursor-pointer bg-transparent border-none"
-            style={{
-              color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
-              transition: 'all 0.2s',
-            }}
+            className={`convo-tab ${activeTab === tab.key ? 'active' : ''}`}
           >
             {tab.label}
             {'count' in tab && tab.count > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 rounded-lg text-[10px] font-bold"
+              <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold"
                 style={{ background: 'var(--danger)', color: '#fff' }}>
                 {tab.count}
               </span>
@@ -159,7 +150,7 @@ export default function ConversationList() {
               className="flex items-center gap-3 rounded-xl cursor-pointer relative"
               style={{
                 padding: 12,
-                marginBottom: 2,
+                marginBottom: 4,
                 background: isActive ? 'var(--bg-active)' : 'transparent',
                 transition: 'all 0.2s',
               }}

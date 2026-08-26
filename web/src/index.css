@@ -58,12 +58,6 @@
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-primary);
@@ -75,17 +69,22 @@ body {
 
 /* 滚动条 - QQ 风格细窄 */
 ::-webkit-scrollbar {
-  width: 5px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2d3748;
-  border-radius: 3px;
+  background: var(--border-light);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a5568;
+  background: var(--text-muted);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
 }
 
 /* 全局过渡 */
@@ -97,6 +96,16 @@ button, a, input, textarea {
 input:focus, textarea:focus {
   border-color: var(--accent) !important;
   outline: none;
+}
+
+/* 键盘可达性：可聚焦元素 focus 环 */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ===== 工具类：玻璃拟态（浅色） ===== */
@@ -231,6 +240,50 @@ input:focus, textarea:focus {
   background: var(--bg-primary);
 }
 
+/* =============================================
+   主界面三栏布局（以消息阅读为中心，稳定不挤压）
+   ============================================= */
+.chat-layout {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-sidebar {
+  width: 76px;
+  flex: 0 0 76px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 0 14px;
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-divider {
+  width: 40px;
+  height: 1px;
+  margin: 4px 0 6px;
+  background: var(--border);
+}
+
+.conversation-pane,
+.contacts-pane {
+  width: 288px;
+  flex: 0 0 288px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-content {
+  min-width: 0;
+  min-height: 0;
+}
+
 /* 时间分隔条 */
 .time-divider-tag {
   background: var(--bg-tertiary);
@@ -329,9 +382,9 @@ input:focus, textarea:focus {
 
 /* 导航项 - 现代深色风格 */
 .nav-item-qq {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,21 +396,23 @@ input:focus, textarea:focus {
   border: none;
 }
 .nav-item-qq:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg-hover));
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 .nav-item-qq.active {
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover));
   color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .nav-item-qq.active::before {
   content: '';
   position: absolute;
-  left: -8px;
+  left: -12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
+  width: 4px;
+  height: 26px;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
 }
@@ -378,6 +433,79 @@ input:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   color: white;
+}
+
+.nav-item-qq svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 会话/联系人 Tab 下划线：用 ::after 与文字保持呼吸 */
+.convo-tab {
+  position: relative;
+  padding: 14px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.convo-tab::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  transition: background-color 0.2s;
+}
+.convo-tab.active {
+  color: var(--accent);
+}
+.convo-tab.active::after {
+  background: var(--accent);
+}
+
+/* 在线/离线状态点 */
+.online-dot,
+.offline-dot {
+  border-radius: 50%;
+}
+
+@media (max-width: 1100px) {
+  .conversation-pane,
+  .contacts-pane {
+    width: 252px;
+    flex-basis: 252px;
+  }
+}
+
+@media (max-width: 820px) {
+  .chat-sidebar {
+    width: 64px;
+    flex-basis: 64px;
+    padding-top: 12px;
+  }
+
+  .chat-sidebar .nav-item-qq {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .chat-sidebar .nav-item-qq.active::before {
+    left: -9px;
+  }
+
+  .conversation-pane,
+  .contacts-pane {
+    width: 224px;
+    flex-basis: 224px;
+  }
 }
 
 /* 会话项选中指示条 */

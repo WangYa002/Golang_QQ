@@ -52,8 +52,8 @@ export default function FriendList({ onOpenProfile }: Props) {
   };
 
   return (
-    <div className="flex flex-col"
-      style={{ width: 320, background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)' }}>
+    <div className="contacts-pane flex flex-col"
+      style={{ background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)' }}>
 
       {/* 头部标题 + 搜索 */}
       <div className="p-4 pb-3">
@@ -103,13 +103,13 @@ export default function FriendList({ onOpenProfile }: Props) {
                   </div>
                   <button
                     onClick={() => acceptRequest(req.id)}
-                    className="px-2.5 py-1 rounded-md text-[11px] cursor-pointer font-medium text-white"
+                    className="px-3 py-1.5 rounded-md text-xs cursor-pointer font-medium text-white min-h-[28px]"
                     style={{ background: 'var(--accent)' }}>
                     同意
                   </button>
                   <button
                     onClick={() => rejectRequest(req.id)}
-                    className="px-2.5 py-1 rounded-md text-[11px] cursor-pointer"
+                    className="px-3 py-1.5 rounded-md text-xs cursor-pointer min-h-[28px]"
                     style={{ color: 'var(--text-muted)' }}>
                     忽略
                   </button>
@@ -140,7 +140,7 @@ export default function FriendList({ onOpenProfile }: Props) {
               key={f.id}
               onClick={() => handleStartChat(f.user.id)}
               onContextMenu={(e) => handleContextMenu(e, f.id, f.user.id)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-0.5"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer mb-1"
               {...hoverHandlers()}
             >
               <div className="relative flex-shrink-0">

@@ -1,8 +1,6 @@
 package ws
 
-import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
+import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type Hub struct {
 	Clients    map[primitive.ObjectID]*Client
@@ -32,10 +30,15 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
+			// 同一用户已有连接（断线重连 / 多标签页）→ 让旧连接的 WritePump 退出
+			if old, ok := h.Clients[client.UserID]; ok {
+				close(old.Send)
+			}
 			h.Clients[client.UserID] = client
 
 		case client := <-h.Unregister:
-			if _, ok := h.Clients[client.UserID]; ok {
+			// 只移除"仍是当前注册连接"的条目，避免旧连接的注销误删新连接
+			if cur, ok := h.Clients[client.UserID]; ok && cur == client {
 				delete(h.Clients, client.UserID)
 				close(client.Send)
 			}

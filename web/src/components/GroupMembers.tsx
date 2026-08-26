@@ -71,10 +71,10 @@ export default function GroupMembers({ groupId, ownerId, onClose, onOpenProfile 
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-1">
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
         {sortedMembers.map((m) => (
           <div key={m.user_id}
-            className="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer"
+            className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer"
             onClick={() => onOpenProfile(m.user_id)}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>

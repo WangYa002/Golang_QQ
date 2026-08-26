@@ -153,6 +153,8 @@ r.Run(":" + port)      // 6. 启动 HTTP
 | `read` | `{conversation_id, message_id}` | 更新 `read_by` |
 | `message_recall` | `{conversation_id, message_id}` | 标记撤回 → 广播 `message_recalled` |
 | `heartbeat` | `{}` | 立即回 `heartbeat` |
+| `call` | `{conversation_id, call_type}` | 发起通话 → 向其他成员广播 `call_incoming` |
+| `call_event` | `{conversation_id, call_id, kind, reason?, signal?}` | kind=`accept/reject/hangup/signal` → 分别广播 `call_accepted/call_rejected/call_ended/call_signal` |
 
 **服务端 → 客户端** 事件：
 
@@ -165,6 +167,9 @@ r.Run(":" + port)      // 6. 启动 HTTP
 | `friend_accepted` | — | `friendStore.fetchFriends` |
 | `message_recalled` | `{conversation_id, message_id}` | `chatStore.handleMessageRecalled` |
 | `heartbeat` | — | （前端目前未消费） |
+| `call_incoming` | `{call_id, conversation_id, call_type, from_user}` | 来电 → `callStore` 振铃 |
+| `call_accepted` / `call_rejected` / `call_ended` | `{call_id, conversation_id, reason?}` | 通话状态机流转 |
+| `call_signal` | `{call_id, conversation_id, signal}` | WebRTC offer/answer/ICE 中继 |
 
 ### 2.6 数据模型
 
@@ -339,3 +344,116 @@ Friend[]
 | 没有 refresh token | `middleware/auth.go` | token 过期就直接 401，前端无感刷新缺失 |
 
 > UI 相关的所有问题汇总在 `frontend-redesign-plan.md`，本文档不展开。
+
+---
+
+## 六、2026-08-26 前端 UI 修复记录
+
+### 6.1 根因（为什么之前"挤在一起"）
+
+`web/src/index.css` 中有一条**未分层**的全局 reset：
+
+```css
+* { margin: 0; padding: 0; box-sizing: border-box; }
+```
+
+Tailwind v4 的所有工具类（`p-*` / `px-*` / `py-*` / `m-*` / `mt-*` 等）都生成在
+`@layer utilities` 里，而**未分层规则的优先级高于任何分层规则**。因此该 reset
+覆盖了全部间距工具类：`padding`、`margin` 全部恒为 0，只剩 flex `gap` 和
+内联 `style` 生效。表现为整站文字贴边、元素挤成一团。
+
+> 复现证据（1500×940 视口，修复前）：`input[placeholder="搜索会话..."]`
+> computed padding 为 `0px`、高度 22px；修复后 padding 为
+> `10px 12px 10px 36px`、高度 42px。
+
+### 6.2 修复内容
+
+| 文件 | 改动 |
+|---|---|
+| `web/src/index.css` | 删除未分层 `*` reset（Tailwind v4 preflight 已提供等价 reset）；新增三栏布局类（`.chat-layout` / `.chat-sidebar` / `.conversation-pane` / `.contacts-pane` / `.chat-content`）；导航栏加宽（76px，按钮 52px）；Tab 下划线改用 `::after` 伪元素；补 `:focus-visible` 焦点环、`.online-dot`/`.offline-dot`、滚动条加粗至 8px + Firefox 兼容 |
+| `web/src/pages/Chat.tsx` | 根容器改用 `.chat-layout`（`100dvh`，响应式三栏，不再固定 64+300 挤压聊天区） |
+| `web/src/components/Sidebar.tsx` | 改用 `.chat-sidebar`，补齐 `aria-label` |
+| `web/src/components/ConversationList.tsx` | 宽度交给 `.conversation-pane`（288px，窄屏自动 252/224）；Tab 下划线伪元素化；徽章 `min-height`、间距加大 |
+| `web/src/components/ChatArea.tsx` | 消息区 `gap` 15→16、群昵称 12px、时间戳/已读间距；补 `.chat-content`；清理两个未用变量（TS 报错） |
+| `web/src/components/FriendList.tsx` | 宽度交给 `.contacts-pane`；"同意/忽略"按钮 `min-height: 28px`、内边距加大；列表项间距 |
+| `web/src/components/GroupMembers.tsx` / `ProfilePanel.tsx` | 列表项/头部内边距统一 |
+
+### 6.3 验证
+
+- `npm run build` 通过（tsc 无错误）
+- 1500×940 无横向滚动，三栏对齐：Sidebar 76 + 列表 288 + 聊天区 1136
+- 浏览器控制台无报错
+
+---
+
+## 七、2026-08-27 好友功能测试与修复记录
+
+### 7.1 测试发现的问题（修复前）
+
+1. **[高] UI 上无法发起加好友**：侧边栏"添加好友"搜索弹窗里只有"聊天"按钮，
+   `store/friend.ts` 的 `sendRequest` 没有任何组件调用。
+   证据：无头浏览器实测搜索结果按钮为 `["搜索","聊天"]`。
+2. **[中] 好友申请徽章不初始化**：登录后不打开联系人页，侧边栏徽章一直为 0，
+   即使已有 pending 申请。证据：登录后（未进联系人页）徽章为 null。
+3. **[中] 改备注接口越权**：`PUT /api/friends/:id/remark` 不校验归属，
+   非好友关系也返回 200 "updated"（未检查 `ModifiedCount`）。
+   证据：API 测试 TC13，C 改 A↔B 的关系返回 200。
+
+### 7.2 修复
+
+- `web/src/components/Sidebar.tsx`：搜索结果项新增"加好友"按钮，调用
+  `friendStore.sendRequest`；成功变"已发送"（防重复提交）；后端英文错误映射为
+  中文提示（已是好友 / 申请已存在 / 不能加自己 / 用户不存在）；关闭弹窗重置状态。
+- `web/src/pages/Chat.tsx`：登录/切号时调用 `fetchRequests()`，徽章随登录初始化。
+- `server/handler/friend.go`：`UpdateFriendRemark` 增加 `MatchedCount==0 → 404` 校验。
+
+### 7.3 回归测试结果（无头 Edge + puppeteer）
+
+1. 后端 API 矩阵（25 例：申请 / 重复 / 反向互斥 / 加自己 / 不存在 /
+   拒绝 / 重发 / 接受 / 双向好友 / 备注 / 越权备注 / 删除 / 空列表 / 多好友）：
+   **25/25 通过**
+2. 端到端"UI 发起加好友 → 对方接受 → WS 实时刷新"（双浏览器上下文）：
+   **12/12 通过**
+3. UI 复测（徽章初始化、右键菜单、查看资料、删除好友、WS 徽章推送）：
+   **8/8 通过 ×2**
+
+---
+
+## 八、2026-08-27 通话功能与全部图标实现
+
+### 8.1 实现内容（参考 QQ 的图标行为）
+
+| 图标/按钮 | 实现 |
+|---|---|
+| 语音通话 | WebRTC 音频通话：呼叫 → 振铃 → 接听/拒绝 → 通话计时 → 挂断；忙线自动拒绝 |
+| 视频通话 | WebRTC 音视频：本地预览 + 远端大画面 + 静音/关摄像头切换 |
+| 更多操作 | 下拉菜单：发起群聊、添加好友、标为已读、清空聊天记录（含会话列表预览同步清空） |
+| 表情/图片/文件/发送/搜索消息/群成员 | 原有功能回归验证 |
+
+### 8.2 新增/修改
+
+- `server/ws/client.go`：新增 `handleCall` / `handleCallEvent` 信令中继；
+  **`maxMessageSize` 4KB → 1MB**（视频 SDP offer 超过 4KB 会触发 gorilla/websocket
+  断连，导致信令丢失——这是测试发现的真实 bug）。
+- `server/ws/hub.go`：修复注册表竞态——旧连接的 `Unregister` 会误删新连接，
+  现在只删除"仍是当前连接"的条目，注册新连接时主动关闭旧连接。
+- `web/src/store/call.ts`：通话状态机 + WebRTC（offer/answer/ICE、静音、关摄像头、
+  60s 无人接听自动挂断、忙线自动拒绝）。
+- `web/src/components/CallOverlay.tsx`：全局通话浮层（全局常驻，任何页面状态都能收到来电）。
+- `web/src/components/ChatArea.tsx`：接通话按钮、更多菜单、轻提示 toast。
+- `web/src/store/ui.ts`：跨组件弹窗开关（Sidebar 与"更多"菜单共用）。
+- `web/src/hooks/useWebSocket.ts`：分发 5 种 call 事件到 call store。
+
+### 8.3 通话信令协议
+
+```jsonc
+// 发起通话（客户端 → 服务端）
+{ "type": "call", "data": { "conversation_id": "...", "call_type": "voice|video" } }
+// 通话事件（客户端 → 服务端，服务端转发给会话其他成员）
+{ "type": "call_event", "data": { "conversation_id": "...", "call_id": "...", "kind": "accept|reject|hangup|signal", "reason": "busy|...", "signal": { "type": "offer|answer|ice", "sdp": "...", "candidate": {...} } } }
+```
+
+### 8.4 回归测试结果
+
+- 通话 + 更多菜单 + 图标回归：**26/26 通过**
+- 好友功能回归：API 25/25、加好友 E2E 12/12（未受影响）

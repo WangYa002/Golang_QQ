@@ -275,12 +275,16 @@ func UpdateFriendRemark(c *gin.Context) {
 		return
 	}
 
-	_, err = model.Friends.UpdateOne(c,
+	res, err := model.Friends.UpdateOne(c,
 		bson.M{"_id": friendID, "user_id": userID},
 		bson.M{"$set": bson.M{"remark": req.Remark}},
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+		return
+	}
+	if res.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "friend not found"})
 		return
 	}
 

@@ -84,7 +84,7 @@ export default function ProfilePanel({ userId, onClose }: Props) {
     <div className="w-[320px] flex flex-col animate-slide-right"
       style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}>
 
-      <div className="p-4 flex items-center justify-between"
+      <div className="px-5 py-4 flex items-center justify-between"
         style={{ borderBottom: '1px solid var(--border)' }}>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           {isMe ? '个人资料' : '用户资料'}
@@ -102,7 +102,7 @@ export default function ProfilePanel({ userId, onClose }: Props) {
         </button>
       </div>
 
-      <div className="p-6 text-center">
+      <div className="px-6 py-5 text-center">
         <div className="relative inline-block group">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto overflow-hidden text-white"
             style={{ background: `linear-gradient(135deg, ${getAvatarColor(user.nickname || user.username)}, ${getAvatarColor((user.nickname || user.username) + 'z')})` }}>

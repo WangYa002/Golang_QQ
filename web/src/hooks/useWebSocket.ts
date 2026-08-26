@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
 import { useFriendStore } from '../store/friend';
+import { useCallStore } from '../store/call';
 import type { WSMessage, Message } from '../types';
 
 export function useWebSocket() {
@@ -80,6 +81,14 @@ export function useWebSocket() {
             case 'message_recalled': {
               const d = msg.data as { conversation_id: string; message_id: string };
               useChatStore.getState().handleMessageRecalled(d.conversation_id, d.message_id);
+              break;
+            }
+            case 'call_incoming':
+            case 'call_accepted':
+            case 'call_rejected':
+            case 'call_ended':
+            case 'call_signal': {
+              useCallStore.getState().handleWSEvent(msg);
               break;
             }
           }

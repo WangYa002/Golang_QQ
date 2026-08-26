@@ -56,6 +56,7 @@ interface ChatState extends ChatData {
   addGroupMember: (groupId: string, userId: string) => Promise<void>;
   leaveGroup: (groupId: string, userId: string) => Promise<void>;
   markAsRead: (convoId: string) => void;
+  clearMessages: (convoId: string) => void;
   handleMessageRecalled: (convoId: string, msgId: string) => void;
 }
 
@@ -238,6 +239,19 @@ export const useChatStore = create<ChatState>((set, get) => {
       mutate(set, (s) => {
         const { [convoId]: _, ...rest } = s.unreadCount;
         return { unreadCount: rest };
+      });
+    },
+
+    clearMessages: (convoId) => {
+      mutate(set, (s) => {
+        const { [convoId]: _, ...rest } = s.messages;
+        return {
+          messages: rest,
+          // 同步清掉会话列表的最近消息预览（与 QQ 行为一致）
+          conversations: s.conversations.map((c) =>
+            c.id === convoId ? { ...c, last_message: undefined } : c
+          ),
+        };
       });
     },
 

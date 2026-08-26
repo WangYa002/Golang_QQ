@@ -7,7 +7,9 @@ import { recallMessage, searchMessages } from '../api/conversations';
 import EmojiPicker from './EmojiPicker';
 import GroupMembers from './GroupMembers';
 import { MessageIcon, UsersIcon, SearchIcon, SendIcon, PaperclipIcon, PhoneIcon, VideoIcon, MoreIcon } from './icons';
-import { inputStyle, hoverHandlers } from '../styles/common';
+import { inputStyle } from '../styles/common';
+import { useCallStore } from '../store/call';
+import { useUIStore } from '../store/ui';
 import type { Message } from '../types';
 
 function shouldShowTimeSeparator(prev: Message | null, curr: Message): boolean {
@@ -73,6 +75,23 @@ export default function ChatArea({ onOpenProfile }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; msgId: string } | null>(null);
+  const [showMore, setShowMore] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const openAddFriend = useUIStore((s) => s.openAddFriend);
+  const openCreateGroup = useUIStore((s) => s.openCreateGroup);
+  const markAsRead = useChatStore((s) => s.markAsRead);
+  const clearMessages = useChatStore((s) => s.clearMessages);
+  const startCall = useCallStore((s) => s.startCall);
+
+  const showNotice = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice(''), 2500);
+  };
+
+  useEffect(() => {
+    useCallStore.getState().setSend(send);
+  }, [send]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -249,7 +268,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
 
   return (
     <>
-      <div className="flex-1 flex flex-col" style={{ background: 'var(--bg-secondary)', position: 'relative' }}>
+      <div className="chat-content flex-1 flex flex-col" style={{ background: 'var(--bg-secondary)', position: 'relative' }}>
 
         {/* 顶栏 - 现代深色风格 */}
         <div className="flex items-center justify-between"
@@ -294,12 +313,30 @@ export default function ChatArea({ onOpenProfile }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+            <button
+              onClick={() => {
+                if (!currentConvo || currentConvo.type === 'group') {
+                  showNotice('群聊暂不支持通话，请使用私聊');
+                  return;
+                }
+                const otherId = currentConvo.members.find((m) => m !== user?.id);
+                startCall(currentConvo.id, 'voice', getConvoName, otherId || '');
+              }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
               style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
               title="语音通话">
               <PhoneIcon size={18} />
             </button>
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+            <button
+              onClick={() => {
+                if (!currentConvo || currentConvo.type === 'group') {
+                  showNotice('群聊暂不支持通话，请使用私聊');
+                  return;
+                }
+                const otherId = currentConvo.members.find((m) => m !== user?.id);
+                startCall(currentConvo.id, 'video', getConvoName, otherId || '');
+              }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
               style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
               title="视频通话">
               <VideoIcon size={18} />
@@ -318,13 +355,76 @@ export default function ChatArea({ onOpenProfile }: Props) {
                 <UsersIcon size={18} />
               </button>
             )}
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
-              title="更多操作">
-              <MoreIcon size={18} />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowMore(!showMore)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+                style={{ color: showMore ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
+                title="更多操作">
+                <MoreIcon size={18} />
+              </button>
+              {showMore && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMore(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-50 w-44 py-2 rounded-xl animate-fade-in"
+                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+                    <button
+                      onClick={() => { openCreateGroup(); setShowMore(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
+                      style={{ color: 'var(--text-primary)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      发起群聊
+                    </button>
+                    <button
+                      onClick={() => { openAddFriend(); setShowMore(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
+                      style={{ color: 'var(--text-primary)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      添加好友
+                    </button>
+                    <button
+                      onClick={() => { if (currentConvoId) markAsRead(currentConvoId); setShowMore(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
+                      style={{ color: 'var(--text-primary)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      标为已读
+                    </button>
+                    <div className="my-1" style={{ borderTop: '1px solid var(--border)' }} />
+                    <button
+                      onClick={() => {
+                        if (currentConvoId) {
+                          clearMessages(currentConvoId);
+                          showNotice('已清空当前会话记录（本地）');
+                        }
+                        setShowMore(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
+                      style={{ color: 'var(--danger)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      清空聊天记录
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* 轻提示 */}
+        {notice && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[90] px-5 py-2.5 rounded-xl text-sm animate-fade-in"
+            style={{ background: 'rgba(17,24,39,0.95)', color: 'var(--text-primary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+            {notice}
+          </div>
+        )}
 
         {showSearch && (
           <div className="px-5 py-2 flex gap-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
@@ -361,8 +461,8 @@ export default function ChatArea({ onOpenProfile }: Props) {
         )}
 
         {/* 消息区域 - QQ 点阵背景 */}
-        <div className="flex-1 overflow-y-auto chat-messages-bg" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 15 }}>
-          {decoratedMessages.map(({ msg, isMine, isSystem, showTimeSep, sameSender, showAvatar, isLastOfSender, senderName, avatarColor }) => {
+        <div className="flex-1 overflow-y-auto chat-messages-bg" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {decoratedMessages.map(({ msg, isMine, isSystem, showTimeSep, showAvatar, isLastOfSender, senderName, avatarColor }) => {
             return (
               <div key={msg.id}>
                 {showTimeSep && (
@@ -399,7 +499,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
 
                     <div className="flex flex-col gap-0.5" style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                       {!isMine && showAvatar && currentConvo?.type === 'group' && (
-                        <span className="text-[11px] ml-1" style={{ color: 'var(--text-muted)' }}>
+                        <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>
                           {senderName}
                         </span>
                       )}
@@ -420,11 +520,11 @@ export default function ChatArea({ onOpenProfile }: Props) {
                       </div>
 
                       {isLastOfSender && (
-                        <span className="text-[10px] mt-0.5"
+                        <span className="text-[11px] mt-1"
                           style={{ color: 'var(--text-muted)', marginLeft: isMine ? 'auto' : 0 }}>
                           {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                           {isMine && msg.read_by && msg.read_by.length > 1 && (
-                            <span className="ml-1">已读 {msg.read_by.length - 1}</span>
+                            <span className="ml-2">已读 {msg.read_by.length - 1}</span>
                           )}
                         </span>
                       )}
@@ -539,6 +639,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
           onOpenProfile={onOpenProfile}
         />
       )}
+
     </>
   );
 }

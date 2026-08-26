@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
+import { useFriendStore } from '../store/friend';
 import Sidebar from '../components/Sidebar';
 import ConversationList from '../components/ConversationList';
 import ChatArea from '../components/ChatArea';
 import FriendList from '../components/FriendList';
 import ProfilePanel from '../components/ProfilePanel';
+import CallOverlay from '../components/CallOverlay';
 
 export default function Chat() {
   const [activeTab, setActiveTab] = useState<'chat' | 'contacts'>('chat');
@@ -17,10 +19,12 @@ export default function Chat() {
     if (!userId) return;
     useAuthStore.getState().fetchMe();
     useChatStore.getState().fetchConversations();
+    // 好友申请徽章初始化：登录/切号后立即拉取，避免侧边栏徽章一直为空
+    useFriendStore.getState().fetchRequests();
   }, [userId]);
 
   return (
-    <div className="h-screen flex overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+    <div className="chat-layout" style={{ background: 'var(--bg-primary)' }}>
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -41,6 +45,9 @@ export default function Chat() {
           onClose={() => setProfileUserId(null)}
         />
       )}
+
+      {/* 全局通话浮层：任何页面状态都能收到来电 */}
+      <CallOverlay />
     </div>
   );
 }
