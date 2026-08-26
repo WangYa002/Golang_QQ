@@ -8,9 +8,10 @@ import ChatArea from '../components/ChatArea';
 import FriendList from '../components/FriendList';
 import ProfilePanel from '../components/ProfilePanel';
 import CallOverlay from '../components/CallOverlay';
+import Admin from './Admin';
 
 export default function Chat() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'contacts'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin'>('chat');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -30,7 +31,9 @@ export default function Chat() {
         onTabChange={setActiveTab}
         onOpenProfile={(userId) => setProfileUserId(userId)}
       />
-      {activeTab === 'chat' ? (
+      {activeTab === 'admin' ? (
+        <Admin />
+      ) : activeTab === 'chat' ? (
         <>
           <ConversationList />
           <ChatArea onOpenProfile={(userId) => setProfileUserId(userId)} />

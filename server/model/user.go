@@ -15,6 +15,7 @@ type User struct {
 	Bio       string             `bson:"bio" json:"bio"`
 	Email     string             `bson:"email" json:"email"`
 	Status    string             `bson:"status" json:"status"`
+	Role      string             `bson:"role" json:"role"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
 }
@@ -27,6 +28,7 @@ type UserPublic struct {
 	Bio       string             `json:"bio"`
 	Email     string             `json:"email"`
 	Status    string             `json:"status"`
+	Role      string             `json:"role"`
 }
 
 func (u *User) ToPublic() UserPublic {
@@ -38,5 +40,6 @@ func (u *User) ToPublic() UserPublic {
 		Bio:      u.Bio,
 		Email:    u.Email,
 		Status:   u.Status,
+		Role:     u.Role,
 	}
 }

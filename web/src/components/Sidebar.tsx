@@ -6,14 +6,14 @@ import { useUIStore } from '../store/ui';
 import * as userApi from '../api/users';
 import { createConversation } from '../api/conversations';
 import type { User } from '../types';
-import { MessageIcon, UsersIcon, UserPlusIcon, UserIcon, LogoutIcon, CloseIcon, CheckIcon } from './icons';
+import { MessageIcon, UsersIcon, UserPlusIcon, UserIcon, LogoutIcon, CloseIcon, CheckIcon, DashboardIcon } from './icons';
 import { inputStyle, hoverHandlers } from '../styles/common';
 import AccountSwitcher from './AccountSwitcher';
 import Portal from './Portal';
 
 interface Props {
-  activeTab: 'chat' | 'contacts';
-  onTabChange: (tab: 'chat' | 'contacts') => void;
+  activeTab: 'chat' | 'contacts' | 'admin';
+  onTabChange: (tab: 'chat' | 'contacts' | 'admin') => void;
   onOpenProfile: (userId: string) => void;
 }
 
@@ -163,6 +163,18 @@ export default function Sidebar({ activeTab, onTabChange, onOpenProfile }: Props
       >
         <UsersIcon size={20} />
       </button>
+
+      {/* 管理后台（仅管理员） */}
+      {user?.role === 'admin' && (
+        <button
+          onClick={() => onTabChange('admin')}
+          className={`nav-item-qq ${activeTab === 'admin' ? 'active' : ''}`}
+          aria-label="管理后台"
+          title="管理后台"
+        >
+          <DashboardIcon size={20} />
+        </button>
+      )}
 
       <div className="flex-1" />
 

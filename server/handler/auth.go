@@ -45,8 +45,15 @@ func Register(c *gin.Context) {
 		Nickname:  req.Nickname,
 		Avatar:    "",
 		Status:    "offline",
+		Role:      "user",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+	}
+
+	// 第一个注册的用户自动成为管理员（空库引导）
+	userCount, _ := model.Users.CountDocuments(c, bson.M{})
+	if userCount == 0 {
+		user.Role = "admin"
 	}
 
 	_, err := model.Users.InsertOne(c, user)

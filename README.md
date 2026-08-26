@@ -26,6 +26,11 @@
 - 多账号切换器（localStorage 持久化，账号间数据隔离）
 - 深色主题 UI、键盘 `focus-visible` 焦点环、响应式三栏布局
 
+### 管理后台
+- 系统统计总览：用户 / 在线 / 会话 / 消息 / 群聊 / 好友 / 好友申请等实时数量
+- 六张数据明细表（用户 / 会话 / 消息 / 群聊 / 好友 / 好友申请），分页 + 关键字搜索
+- 第一个注册的用户自动成为管理员；已有库可用环境变量 `ADMIN_USERNAME` 指定管理员
+
 ## 🛠 技术栈
 
 | 端 | 技术 |
@@ -109,6 +114,12 @@ npm run dev
 | GET/DELETE | `/api/friends` `/api/friends/:id` | 好友列表 / 删除好友 |
 | PUT | `/api/friends/:id/remark` | 好友备注 |
 | POST | `/api/upload` | 文件上传 |
+| GET | `/api/admin/stats` | 管理后台统计（管理员） |
+| GET | `/api/admin/users` `/api/admin/messages` | 用户 / 消息分页列表（管理员，可搜索） |
+| GET | `/api/admin/conversations` `/api/admin/groups` `/api/admin/friends` `/api/admin/friend_requests` | 其余表分页列表（管理员） |
+
+> 管理员：第一个注册的用户自动成为管理员；已有数据时在 `server/.env` 配置
+> `ADMIN_USERNAME=你的用户名` 并重启后端即可提升。
 
 ### WebSocket 事件
 
@@ -132,6 +143,7 @@ npm install puppeteer-core
 node friend-api-test.mjs    # 好友 API 矩阵（25 例）
 node friend-add-e2e.mjs     # 加好友端到端（12 例）
 node call-more-test.mjs     # 通话 + 图标功能（26 例）
+node admin-test.mjs         # 管理后台（16 例）
 ```
 
 详见 [tests/e2e/README.md](tests/e2e/README.md)。

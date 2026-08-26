@@ -64,5 +64,17 @@ func Setup(r *gin.Engine) {
 
 			authorized.POST("/upload", handler.UploadFile)
 		}
+
+		admin := api.Group("/admin")
+		admin.Use(middleware.AuthMiddleware(), middleware.RequireAdmin())
+		{
+			admin.GET("/stats", handler.AdminStats)
+			admin.GET("/users", handler.AdminListUsers)
+			admin.GET("/conversations", handler.AdminListConversations)
+			admin.GET("/messages", handler.AdminListMessages)
+			admin.GET("/groups", handler.AdminListGroups)
+			admin.GET("/friends", handler.AdminListFriends)
+			admin.GET("/friend_requests", handler.AdminListFriendRequests)
+		}
 	}
 }

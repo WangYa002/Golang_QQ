@@ -7,9 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"golang-qq/config"
+	"golang-qq/model"
 )
 
 type Claims struct {
@@ -60,4 +62,20 @@ func AuthMiddleware() gin.HandlerFunc {
 func GetUserID(c *gin.Context) primitive.ObjectID {
 	id, _ := c.Get("userID")
 	return id.(primitive.ObjectID)
+}
+
+// RequireAdmin 校验当前用户角色为 admin
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := GetUserID(c)
+		var user model.User
+		err := model.Users.FindOne(c, bson.M{"_id": userID}).Decode(&user)
+		if err != nil || user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin required"})
+			c.Abort()
+			return
+		}
+		c.Set("adminUser", user)
+		c.Next()
+	}
 }

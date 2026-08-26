@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	Port        string
-	MongoURI    string
-	MongoDBName string
-	JWTSecret   string
-	UploadDir   string
+	Port          string
+	MongoURI      string
+	MongoDBName   string
+	JWTSecret     string
+	UploadDir     string
+	AdminUsername string
 }
 
 var AppConfig *Config
@@ -26,11 +27,12 @@ func Load() {
 	}
 
 	AppConfig = &Config{
-		Port:        getEnv("PORT", "8080"),
-		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDBName: getEnv("MONGO_DB", "golang_qq"),
-		JWTSecret:   jwtSecret,
-		UploadDir:   getEnv("UPLOAD_DIR", "../uploads"),
+		Port:          getEnv("PORT", "8080"),
+		MongoURI:      getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:   getEnv("MONGO_DB", "golang_qq"),
+		JWTSecret:     jwtSecret,
+		UploadDir:     getEnv("UPLOAD_DIR", "../uploads"),
+		AdminUsername: os.Getenv("ADMIN_USERNAME"),
 	}
 }
 

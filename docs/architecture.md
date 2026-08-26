@@ -131,6 +131,13 @@ r.Run(":" + port)      // 6. 启动 HTTP
 | PUT | `/api/friends/:id/remark` | `UpdateFriendRemark` | ✅ |
 | POST | `/api/upload` | `UploadFile` | ✅ |
 | GET | `/uploads/*` | gin.Static | ❌ |
+| GET | `/api/admin/stats` | `AdminStats`（各表统计） | ✅ 管理员 |
+| GET | `/api/admin/users` | `AdminListUsers`（分页/搜索） | ✅ 管理员 |
+| GET | `/api/admin/conversations` | `AdminListConversations` | ✅ 管理员 |
+| GET | `/api/admin/messages` | `AdminListMessages`（内容搜索） | ✅ 管理员 |
+| GET | `/api/admin/groups` | `AdminListGroups` | ✅ 管理员 |
+| GET | `/api/admin/friends` | `AdminListFriends` | ✅ 管理员 |
+| GET | `/api/admin/friend_requests` | `AdminListFriendRequests` | ✅ 管理员 |
 
 ### 2.5 WebSocket 协议
 
@@ -457,3 +464,22 @@ Tailwind v4 的所有工具类（`p-*` / `px-*` / `py-*` / `m-*` / `mt-*` 等）
 
 - 通话 + 更多菜单 + 图标回归：**26/26 通过**
 - 好友功能回归：API 25/25、加好友 E2E 12/12（未受影响）
+
+---
+
+## 九、2026-08-27 管理后台
+
+### 9.1 管理员机制
+
+- `users` 集合新增 `role` 字段（`admin` / `user`，默认 `user`）。
+- **第一个注册的用户自动成为管理员**（空库引导）；已有库可用
+  `ADMIN_USERNAME=<用户名>` 环境变量把指定用户提升为管理员（当前 `.env` 已配置
+  `alice_demo`）。
+- 管理接口统一走 `middleware.RequireAdmin()`，非管理员返回 403。
+
+### 9.2 前端
+
+- 侧边栏为管理员显示"管理后台"入口（`DashboardIcon`），点击进入 `pages/Admin.tsx`。
+- 首页：8 张统计卡片（用户/在线/会话/消息/群聊/好友/申请/待处理）。
+- 六张明细表（用户/会话/消息/群聊/好友/好友申请）：分页 + 用户、消息支持关键字搜索，
+  用户表含角色徽章，消息表含发送者，好友表含双方昵称。

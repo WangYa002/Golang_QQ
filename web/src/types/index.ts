@@ -6,6 +6,7 @@ export interface User {
   bio: string;
   email: string;
   status: 'online' | 'offline' | 'away';
+  role?: 'admin' | 'user' | '';
 }
 
 export interface Conversation {
@@ -91,5 +92,69 @@ export interface Friend {
   id: string;
   user: User;
   remark: string;
+  created_at: string;
+}
+
+/* ===== 管理后台 ===== */
+
+export interface AdminStats {
+  users: number;
+  conversations: number;
+  messages: number;
+  groups: number;
+  friends: number;
+  friend_requests: number;
+  pending_requests: number;
+  online_users: number;
+}
+
+export interface AdminList<T> {
+  total: number;
+  page: number;
+  page_size: number;
+  items: T[];
+}
+
+export interface AdminMessageRow {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name: string;
+  type: string;
+  content: string;
+  read_by: string[];
+  created_at: string;
+}
+
+export interface AdminGroupRow {
+  id: string;
+  name: string;
+  avatar: string;
+  owner_id: string;
+  owner_name: string;
+  member_count: number;
+  max_members: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminFriendRow {
+  id: string;
+  user_id: string;
+  user_name: string;
+  friend_id: string;
+  friend_name: string;
+  remark: string;
+  created_at: string;
+}
+
+export interface AdminRequestRow {
+  id: string;
+  from_user_id: string;
+  from_name: string;
+  to_user_id: string;
+  to_name: string;
+  message: string;
+  status: string;
   created_at: string;
 }
