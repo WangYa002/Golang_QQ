@@ -1,0 +1,522 @@
+/* =============================================
+   登录页 —— 科技感单卡片设计（参考 trae.cn 背景）
+   ============================================= */
+
+.lg-page {
+  --lg-accent: #00e5ae;
+  --lg-accent-strong: #2af5c4;
+  --lg-accent-dim: rgba(0, 229, 174, 0.14);
+  --lg-cyan: #38bdf8;
+  --lg-violet: #8b74ff;
+  --lg-bg: #07090c;
+  --lg-card: rgba(17, 22, 29, 0.72);
+  --lg-border: rgba(255, 255, 255, 0.08);
+  --lg-text: #eef2f6;
+  --lg-text-2: #9aa7b4;
+  --lg-text-3: #5c6a78;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--lg-bg);
+  color: var(--lg-text);
+  display: flex;
+  align-items: center;
+}
+
+/* ===== 背景层 ===== */
+.lg-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0, 229, 174, 0.07), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(139, 116, 255, 0.06), transparent 60%),
+    var(--lg-bg);
+}
+
+.lg-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.lg-orb-1 {
+  width: 480px;
+  height: 480px;
+  top: -120px;
+  right: -80px;
+  background: radial-gradient(circle, rgba(0, 229, 174, 0.22), transparent 65%);
+  animation: lg-orb-drift-1 26s ease-in-out infinite alternate;
+}
+.lg-orb-2 {
+  width: 560px;
+  height: 560px;
+  bottom: -180px;
+  left: -140px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.16), transparent 65%);
+  animation: lg-orb-drift-2 32s ease-in-out infinite alternate;
+}
+.lg-orb-3 {
+  width: 420px;
+  height: 420px;
+  top: 38%;
+  left: 42%;
+  background: radial-gradient(circle, rgba(139, 116, 255, 0.14), transparent 65%);
+  animation: lg-orb-drift-3 40s ease-in-out infinite alternate;
+}
+
+@keyframes lg-orb-drift-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-70px, 60px) scale(1.15); }
+}
+@keyframes lg-orb-drift-2 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(90px, -50px) scale(1.1); }
+}
+@keyframes lg-orb-drift-3 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-60px, -70px) scale(1.2); }
+}
+
+/* 科技网格 */
+.lg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 75%);
+}
+
+/* 扫描线 */
+.lg-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(180deg, transparent, rgba(0, 229, 174, 0.045), transparent);
+  animation: lg-scan 9s linear infinite;
+}
+@keyframes lg-scan {
+  0%   { top: -180px; }
+  100% { top: 100%; }
+}
+
+/* 暗角 */
+.lg-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 85% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* ===== 登录卡片（右侧） ===== */
+.lg-card {
+  position: relative;
+  z-index: 1;
+  width: 430px;
+  max-width: calc(100vw - 40px);
+  margin-left: auto;
+  margin-right: 9vw;
+  padding: 42px 40px 34px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(24, 30, 40, 0.78), rgba(13, 17, 24, 0.86));
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+  border: 1px solid var(--lg-border);
+  box-shadow:
+    0 0 0 1px rgba(0, 229, 174, 0.04),
+    0 30px 70px -20px rgba(0, 0, 0, 0.75),
+    0 0 90px rgba(0, 229, 174, 0.06);
+  animation: lg-card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lg-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(0, 229, 174, 0.35), transparent 30%, transparent 70%, rgba(139, 116, 255, 0.3));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+@keyframes lg-card-in {
+  0%   { opacity: 0; transform: translateY(26px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 品牌 */
+.lg-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 30px;
+}
+.lg-brand-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--lg-accent), #0ea5e9);
+  color: #04120d;
+  box-shadow: 0 0 26px rgba(0, 229, 174, 0.35);
+  flex-shrink: 0;
+}
+.lg-brand-text h2 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+.lg-brand-text span {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--lg-accent);
+  text-transform: uppercase;
+}
+
+/* 登录/注册分段控件 */
+.lg-tabs {
+  display: flex;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--lg-border);
+  margin-bottom: 28px;
+}
+.lg-tabs button {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lg-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+.lg-tabs button.active {
+  background: linear-gradient(135deg, rgba(0, 229, 174, 0.18), rgba(56, 189, 248, 0.12));
+  color: var(--lg-accent-strong);
+  box-shadow: 0 0 18px rgba(0, 229, 174, 0.15), inset 0 0 0 1px rgba(0, 229, 174, 0.25);
+}
+
+.lg-heading {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+}
+.lg-sub {
+  font-size: 14px;
+  color: var(--lg-text-3);
+  margin-bottom: 26px;
+}
+
+/* 表单 */
+.lg-field {
+  margin-bottom: 18px;
+}
+.lg-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lg-text-2);
+  margin-bottom: 8px;
+}
+.lg-input {
+  position: relative;
+}
+.lg-input input {
+  width: 100%;
+  padding: 14px 46px 14px 46px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--lg-border);
+  border-radius: 12px;
+  color: var(--lg-text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.25s ease;
+}
+.lg-input input::placeholder {
+  color: #55606d;
+}
+.lg-input input:focus {
+  border-color: rgba(0, 229, 174, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(0, 229, 174, 0.12), 0 0 24px rgba(0, 229, 174, 0.08);
+}
+.lg-input-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #67737f;
+  pointer-events: none;
+  transition: color 0.25s ease;
+}
+.lg-input input:focus ~ .lg-input-icon {
+  color: var(--lg-accent);
+}
+.lg-pwd-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #67737f;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  transition: color 0.2s ease;
+}
+.lg-pwd-toggle:hover {
+  color: var(--lg-text-2);
+}
+
+.lg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 22px;
+  font-size: 13px;
+}
+.lg-remember {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--lg-text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.lg-remember input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid #44505c;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.lg-remember input:checked {
+  background: var(--lg-accent);
+  border-color: var(--lg-accent);
+}
+.lg-remember input:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #04120d;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.lg-forgot {
+  background: none;
+  border: none;
+  color: var(--lg-text-3);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: color 0.2s ease;
+}
+.lg-forgot:hover {
+  color: var(--lg-accent);
+}
+
+.lg-submit {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #04120d;
+  background: linear-gradient(135deg, var(--lg-accent-strong), var(--lg-accent) 55%, #00b894);
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(0, 229, 174, 0.28);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+.lg-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 36px rgba(0, 229, 174, 0.38);
+}
+.lg-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+.lg-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.lg-submit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transition: left 0.6s ease;
+}
+.lg-submit:hover:not(:disabled)::after {
+  left: 100%;
+}
+
+.lg-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 18px;
+  color: var(--lg-text-3);
+  font-size: 12px;
+}
+.lg-divider::before,
+.lg-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lg-border);
+}
+
+.lg-social {
+  display: flex;
+  gap: 12px;
+}
+.lg-social-btn {
+  flex: 1;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--lg-border);
+  color: var(--lg-text-2);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.lg-social-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--lg-accent);
+  border-color: rgba(0, 229, 174, 0.3);
+  transform: translateY(-2px);
+}
+.lg-social-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.lg-switch {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--lg-text-3);
+}
+.lg-switch button {
+  background: none;
+  border: none;
+  color: var(--lg-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-left: 6px;
+  transition: color 0.2s ease;
+}
+.lg-switch button:hover {
+  color: var(--lg-accent-strong);
+  text-decoration: underline;
+}
+
+.lg-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.lg-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.lg-strength .lg-bar {
+  flex: 1;
+  display: flex;
+  gap: 5px;
+}
+.lg-strength .lg-bar i {
+  flex: 1;
+  height: 3px;
+  border-radius: 3px;
+  transition: background 0.25s ease;
+}
+.lg-strength span {
+  font-size: 12px;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1100px) {
+  .lg-card {
+    margin-right: 6vw;
+  }
+}
+@media (max-width: 760px) {
+  .lg-page {
+    align-items: flex-start;
+    padding: 0;
+  }
+  .lg-card {
+    margin: 9vh auto 0;
+    width: 100%;
+    max-width: 420px;
+    padding: 34px 26px 28px;
+  }
+  .lg-scanline {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-orb,
+  .lg-scanline,
+  .lg-card {
+    animation: none !important;
+  }
+}

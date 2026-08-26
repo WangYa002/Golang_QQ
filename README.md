@@ -2,7 +2,7 @@
 
 一个仿 QQ 的即时通讯（IM）项目：**Go（Gin + WebSocket + MongoDB）后端 + React（Vite + Tailwind v4 + Zustand）前端**，支持单聊、群聊、好友、消息撤回、多账号切换、在线状态、输入指示，以及 WebRTC 音视频通话。
 
-![聊天主界面](docs/screenshots/chat.png)
+![登录页](docs/screenshots/login.png) ![聊天主界面](docs/screenshots/chat.png)
 
 ## ✨ 功能特性
 
