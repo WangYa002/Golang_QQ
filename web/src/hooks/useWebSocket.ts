@@ -9,6 +9,7 @@ export function useWebSocket() {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(false);
   const unsubAuthRef = useRef<(() => void) | null>(null);
+  const currentTokenRef = useRef<string | null>(null);
 
   const send = useCallback((type: string, data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -30,6 +31,10 @@ export function useWebSocket() {
       const currentToken = useAuthStore.getState().token;
       if (!currentToken) return;
 
+      // 若当前已连接同一 token，无需重连
+      if (wsRef.current && currentTokenRef.current === currentToken) return;
+
+      // 关闭旧连接（账号切换场景：旧 WS 必须断开，避免串号）
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
@@ -40,6 +45,7 @@ export function useWebSocket() {
       const wsUrl = `${protocol}//${window.location.host}/ws?token=${currentToken}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      currentTokenRef.current = currentToken;
 
       ws.onmessage = (event) => {
         try {
@@ -96,14 +102,19 @@ export function useWebSocket() {
     const token = useAuthStore.getState().token;
     if (token) connect();
 
-    // Reconnect when token changes (e.g. after login)
+    // 订阅账号/token 变化：登录新账号、切换账号、登出
     unsubAuthRef.current = useAuthStore.subscribe((state) => {
-      if (state.token && !wsRef.current) {
-        connect();
+      if (state.token) {
+        // token 变化（登录/切换）→ 重连到新账号
+        if (currentTokenRef.current !== state.token) {
+          connect();
+        }
       } else if (!state.token && wsRef.current) {
+        // 全部账号登出 → 断开
         wsRef.current.onclose = null;
         wsRef.current.close();
         wsRef.current = null;
+        currentTokenRef.current = null;
       }
     });
 
@@ -119,6 +130,7 @@ export function useWebSocket() {
         wsRef.current.close();
         wsRef.current = null;
       }
+      currentTokenRef.current = null;
     };
   }, []);
 

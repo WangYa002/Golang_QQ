@@ -3,6 +3,13 @@ import { getGroupMembers, removeGroupMember } from '../api/groups';
 import { useAuthStore } from '../store/auth';
 import type { GroupMemberWithUser } from '../types';
 
+const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 interface Props {
   groupId: string;
   ownerId: string;
@@ -71,8 +78,8 @@ export default function GroupMembers({ groupId, ownerId, onClose, onOpenProfile 
             onClick={() => onOpenProfile(m.user_id)}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 text-white"
+              style={{ background: `linear-gradient(135deg, ${getAvatarColor(m.user.nickname || m.user.username)}, ${getAvatarColor((m.user.nickname || m.user.username) + 'z')})` }}>
               {m.user.nickname?.[0] || m.user.username[0]}
             </div>
             <div className="flex-1 min-w-0">
@@ -110,7 +117,7 @@ export default function GroupMembers({ groupId, ownerId, onClose, onOpenProfile 
           <button
             onClick={handleLeave}
             className="w-full py-2 rounded-xl text-sm cursor-pointer font-medium"
-            style={{ background: 'rgba(255,107,107,0.1)', color: 'var(--danger)', border: '1px solid rgba(255,107,107,0.2)' }}>
+            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)' }}>
             退出群聊
           </button>
         </div>

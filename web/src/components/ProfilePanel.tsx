@@ -6,6 +6,13 @@ import { createConversation } from '../api/conversations';
 import { useChatStore } from '../store/chat';
 import type { User } from '../types';
 
+const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 interface Props {
   userId: string;
   onClose: () => void;
@@ -97,8 +104,8 @@ export default function ProfilePanel({ userId, onClose }: Props) {
 
       <div className="p-6 text-center">
         <div className="relative inline-block group">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto overflow-hidden text-white"
+            style={{ background: `linear-gradient(135deg, ${getAvatarColor(user.nickname || user.username)}, ${getAvatarColor((user.nickname || user.username) + 'z')})` }}>
             {user.avatar ? (
               <img src={user.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -122,14 +129,14 @@ export default function ProfilePanel({ userId, onClose }: Props) {
             <input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl outline-none text-sm text-center"
+              className="w-full px-3.5 py-2.5 rounded-lg outline-none text-sm text-center"
               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
               placeholder="昵称"
             />
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl outline-none text-sm resize-none"
+              className="w-full px-3.5 py-2.5 rounded-lg outline-none text-sm resize-none"
               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
               placeholder="个性签名"
               rows={3}
@@ -138,7 +145,7 @@ export default function ProfilePanel({ userId, onClose }: Props) {
               <button
                 onClick={handleSave}
                 className="flex-1 py-2 rounded-xl text-sm font-medium text-white cursor-pointer"
-                style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))' }}>
+                style={{ background: 'var(--accent)' }}>
                 保存
               </button>
               <button
@@ -170,7 +177,7 @@ export default function ProfilePanel({ userId, onClose }: Props) {
               <button
                 onClick={handleStartChat}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white cursor-pointer"
-                style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))' }}>
+                style={{ background: 'var(--accent)' }}>
                 发送消息
               </button>
             )}

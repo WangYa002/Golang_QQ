@@ -3,8 +3,19 @@ import type { Conversation, Message, Group } from '../types';
 import * as convoApi from '../api/conversations';
 import * as userApi from '../api/users';
 import * as groupApi from '../api/groups';
+import { useAccountsStore } from './accounts';
 
-interface ChatState {
+/**
+ * Chat store —— 按 active 账号隔离数据，顶层暴露当前账号的扁平视图。
+ *
+ * 内部 `data: Record<userId, ChatData>` 存所有账号的切片；
+ * 顶层扁平字段（conversations / messages / currentConvoId 等）始终反映当前 active 账号，
+ * 由 subscribe 同步刷新。这样组件无需改动订阅方式（useChatStore(s => s.conversations) 仍可用）。
+ *
+ * 切换账号时：accounts.activeId 变化 → 顶层视图刷新为新账号切片。
+ */
+
+interface ChatData {
   conversations: Conversation[];
   currentConvoId: string | null;
   messages: Record<string, Message[]>;
@@ -13,7 +24,26 @@ interface ChatState {
   userNames: Record<string, string>;
   groupDetails: Record<string, Group>;
   unreadCount: Record<string, number>;
+  initialized: boolean;
+}
 
+const emptySlice = (): ChatData => ({
+  conversations: [],
+  currentConvoId: null,
+  messages: {},
+  typingUsers: {},
+  onlineUsers: {},
+  userNames: {},
+  groupDetails: {},
+  unreadCount: {},
+  initialized: false,
+});
+
+interface ChatState extends ChatData {
+  /** 当前账号 userId（只读派生） */
+  activeUserId: string | null;
+
+  // —— actions ——
   fetchConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
   addMessage: (msg: Message) => void;
@@ -27,171 +57,203 @@ interface ChatState {
   leaveGroup: (groupId: string, userId: string) => Promise<void>;
   markAsRead: (convoId: string) => void;
   handleMessageRecalled: (convoId: string, msgId: string) => void;
-  getTotalUnread: () => number;
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
-  conversations: [],
-  currentConvoId: null,
-  messages: {},
-  typingUsers: {},
-  onlineUsers: {},
-  userNames: {},
-  groupDetails: {},
-  unreadCount: {},
+/** 账号隔离的存储（非响应式，仅内部用） */
+const perUser: Record<string, ChatData> = {};
 
-  fetchConversations: async () => {
-    const convos = await convoApi.getConversations();
-    // 按 updated_at 降序排列
-    const sorted = [...convos].sort((a, b) =>
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    );
-    set({ conversations: sorted });
-  },
+function getSlice(uid: string | null): ChatData {
+  if (!uid) return emptySlice();
+  if (!perUser[uid]) perUser[uid] = emptySlice();
+  return perUser[uid];
+}
 
-  selectConversation: async (id) => {
-    set({ currentConvoId: id });
-    // 清除未读
-    set((s) => {
-      const { [id]: _, ...rest } = s.unreadCount;
-      return { unreadCount: rest };
-    });
-    if (!get().messages[id]) {
-      const msgs = await convoApi.getMessages(id);
-      set((s) => ({ messages: { ...s.messages, [id]: msgs.reverse() } }));
-    }
-  },
+/** 把某账号切片的内容同步到顶层 state */
+function viewOf(uid: string | null): Partial<ChatState> {
+  const s = getSlice(uid);
+  return {
+    activeUserId: uid,
+    conversations: s.conversations,
+    currentConvoId: s.currentConvoId,
+    messages: s.messages,
+    typingUsers: s.typingUsers,
+    onlineUsers: s.onlineUsers,
+    userNames: s.userNames,
+    groupDetails: s.groupDetails,
+    unreadCount: s.unreadCount,
+  };
+}
 
-  addMessage: (msg) => {
-    const currentConvoId = get().currentConvoId;
-    set((s) => {
-      const convoMsgs = s.messages[msg.conversation_id] || [];
-      return {
-        messages: { ...s.messages, [msg.conversation_id]: [...convoMsgs, msg] },
-      };
-    });
-    // 更新会话列表（移到顶部）
-    set((s) => ({
-      conversations: [
-        ...s.conversations.map((c) =>
+/** 修改当前账号切片并刷新顶层视图 */
+function mutate(
+  set: (fn: (s: ChatState) => Partial<ChatState>) => void,
+  patch: (s: ChatData) => Partial<ChatData>
+) {
+  const uid = useAccountsStore.getState().active()?.userId ?? null;
+  if (!uid) return;
+  const slice = getSlice(uid);
+  Object.assign(slice, patch(slice));
+  set(() => viewOf(uid));
+}
+
+export const useChatStore = create<ChatState>((set, get) => {
+  // 订阅账号切换：active 变化时刷新顶层视图为新账号切片
+  useAccountsStore.subscribe(() => {
+    const uid = useAccountsStore.getState().active()?.userId ?? null;
+    set(() => viewOf(uid));
+  });
+
+  const initialUid = useAccountsStore.getState().active()?.userId ?? null;
+
+  return {
+    ...viewOf(initialUid) as ChatState,
+    activeUserId: initialUid,
+
+    fetchConversations: async () => {
+      const convos = await convoApi.getConversations();
+      const sorted = [...convos].sort((a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+      mutate(set, () => ({ conversations: sorted, initialized: true }));
+    },
+
+    selectConversation: async (id) => {
+      mutate(set, (s) => {
+        const { [id]: _, ...rest } = s.unreadCount;
+        return { currentConvoId: id, unreadCount: rest };
+      });
+      const cur = getSlice(useAccountsStore.getState().active()?.userId ?? null);
+      if (!cur.messages[id]) {
+        const msgs = await convoApi.getMessages(id);
+        mutate(set, (s) => ({
+          messages: { ...s.messages, [id]: msgs.reverse() },
+        }));
+      }
+    },
+
+    addMessage: (msg) => {
+      const uid = useAccountsStore.getState().active()?.userId ?? null;
+      if (!uid) return;
+      const slice = getSlice(uid);
+      const convoMsgs = slice.messages[msg.conversation_id] || [];
+      slice.messages = { ...slice.messages, [msg.conversation_id]: [...convoMsgs, msg] };
+      slice.conversations = [
+        ...slice.conversations.map((c) =>
           c.id === msg.conversation_id
             ? { ...c, last_message: { content: msg.content, sender_id: msg.sender_id, type: msg.type, created_at: msg.created_at }, updated_at: msg.created_at }
             : c
         ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
-      ],
-    }));
-    // 非当前会话增加未读
-    if (msg.conversation_id !== currentConvoId) {
-      set((s) => ({
-        unreadCount: {
-          ...s.unreadCount,
-          [msg.conversation_id]: (s.unreadCount[msg.conversation_id] || 0) + 1,
-        },
-      }));
-    }
-  },
-
-  setTyping: (convoId, userId) => {
-    set((s) => {
-      const users = s.typingUsers[convoId] || [];
-      if (users.includes(userId)) return s;
-      return { typingUsers: { ...s.typingUsers, [convoId]: [...users, userId] } };
-    });
-    setTimeout(() => {
-      set((s) => ({
-        typingUsers: {
-          ...s.typingUsers,
-          [convoId]: (s.typingUsers[convoId] || []).filter((u) => u !== userId),
-        },
-      }));
-    }, 3000);
-  },
-
-  setUserOnline: (userId) => {
-    set((s) => ({
-      onlineUsers: { ...s.onlineUsers, [userId]: true },
-    }));
-  },
-
-  setUserOffline: (userId) => {
-    set((s) => {
-      const { [userId]: _, ...rest } = s.onlineUsers;
-      return { onlineUsers: rest };
-    });
-  },
-
-  fetchUserName: async (userId) => {
-    if (get().userNames[userId]) return;
-    try {
-      const users = await userApi.searchUsers(userId);
-      const found = users.find((u) => u.id === userId);
-      if (found) {
-        set((s) => ({
-          userNames: { ...s.userNames, [userId]: found.nickname || found.username },
-        }));
+      ];
+      if (slice.currentConvoId !== msg.conversation_id) {
+        slice.unreadCount = {
+          ...slice.unreadCount,
+          [msg.conversation_id]: (slice.unreadCount[msg.conversation_id] || 0) + 1,
+        };
       }
-    } catch {
-      // ignore
-    }
-  },
+      set(() => viewOf(uid));
+    },
 
-  createGroup: async (name, memberIds) => {
-    const res = await groupApi.createGroup(name, '', memberIds);
-    await get().fetchConversations();
-    const convo = res.conversation as { id?: string } | undefined;
-    if (convo?.id) {
-      get().selectConversation(convo.id);
-    }
-  },
+    setTyping: (convoId, userId) => {
+      mutate(set, (s) => {
+        const users = s.typingUsers[convoId] || [];
+        if (users.includes(userId)) return {};
+        return { typingUsers: { ...s.typingUsers, [convoId]: [...users, userId] } };
+      });
+      setTimeout(() => {
+        mutate(set, (s) => ({
+          typingUsers: {
+            ...s.typingUsers,
+            [convoId]: (s.typingUsers[convoId] || []).filter((u) => u !== userId),
+          },
+        }));
+      }, 3000);
+    },
 
-  fetchGroupDetails: async (groupId) => {
-    if (get().groupDetails[groupId]) return;
-    try {
-      const group = await groupApi.getGroup(groupId);
-      set((s) => ({ groupDetails: { ...s.groupDetails, [groupId]: group } }));
-    } catch {
-      // ignore
-    }
-  },
+    setUserOnline: (userId) => {
+      mutate(set, (s) => ({
+        onlineUsers: { ...s.onlineUsers, [userId]: true },
+      }));
+    },
 
-  addGroupMember: async (groupId, userId) => {
-    await groupApi.addGroupMember(groupId, userId);
-    // 刷新群详情
-    set((s) => {
-      const { [groupId]: _, ...rest } = s.groupDetails;
-      return { groupDetails: rest };
-    });
-    get().fetchGroupDetails(groupId);
-  },
+    setUserOffline: (userId) => {
+      mutate(set, (s) => {
+        const { [userId]: _, ...rest } = s.onlineUsers;
+        return { onlineUsers: rest };
+      });
+    },
 
-  leaveGroup: async (groupId, userId) => {
-    await groupApi.removeGroupMember(groupId, userId);
-    await get().fetchConversations();
-  },
+    fetchUserName: async (userId) => {
+      const uid = useAccountsStore.getState().active()?.userId ?? null;
+      if (!uid) return;
+      if (getSlice(uid).userNames[userId]) return;
+      try {
+        // 按 ID 直接查询（旧实现用 searchUsers 按用户名搜 ObjectID，永远匹配不到）
+        const user = await userApi.getUser(userId);
+        if (user) {
+          mutate(set, (s) => ({
+            userNames: { ...s.userNames, [userId]: user.nickname || user.username },
+          }));
+        }
+      } catch {
+        // ignore
+      }
+    },
 
-  markAsRead: (convoId) => {
-    set((s) => {
-      const { [convoId]: _, ...rest } = s.unreadCount;
-      return { unreadCount: rest };
-    });
-  },
+    createGroup: async (name, memberIds) => {
+      const res = await groupApi.createGroup(name, '', memberIds);
+      await get().fetchConversations();
+      const convo = res.conversation as { id?: string } | undefined;
+      if (convo?.id) {
+        get().selectConversation(convo.id);
+      }
+    },
 
-  handleMessageRecalled: (convoId, msgId) => {
-    set((s) => {
-      const msgs = s.messages[convoId];
-      if (!msgs) return s;
-      return {
-        messages: {
-          ...s.messages,
-          [convoId]: msgs.map((m) =>
-            m.id === msgId ? { ...m, type: 'system' as const, content: '该消息已撤回' } : m
-          ),
-        },
-      };
-    });
-  },
+    fetchGroupDetails: async (groupId) => {
+      const uid = useAccountsStore.getState().active()?.userId ?? null;
+      if (!uid) return;
+      if (getSlice(uid).groupDetails[groupId]) return;
+      try {
+        const group = await groupApi.getGroup(groupId);
+        mutate(set, (s) => ({ groupDetails: { ...s.groupDetails, [groupId]: group } }));
+      } catch {
+        // ignore
+      }
+    },
 
-  getTotalUnread: () => {
-    return Object.values(get().unreadCount).reduce((sum, n) => sum + n, 0);
-  },
-}));
+    addGroupMember: async (groupId, userId) => {
+      await groupApi.addGroupMember(groupId, userId);
+      mutate(set, (s) => {
+        const { [groupId]: _, ...rest } = s.groupDetails;
+        return { groupDetails: rest };
+      });
+      get().fetchGroupDetails(groupId);
+    },
+
+    leaveGroup: async (groupId, userId) => {
+      await groupApi.removeGroupMember(groupId, userId);
+      await get().fetchConversations();
+    },
+
+    markAsRead: (convoId) => {
+      mutate(set, (s) => {
+        const { [convoId]: _, ...rest } = s.unreadCount;
+        return { unreadCount: rest };
+      });
+    },
+
+    handleMessageRecalled: (convoId, msgId) => {
+      mutate(set, (s) => {
+        const msgs = s.messages[convoId];
+        if (!msgs) return {};
+        return {
+          messages: {
+            ...s.messages,
+            [convoId]: msgs.map((m) =>
+              m.id === msgId ? { ...m, type: 'system' as const, content: '该消息已撤回' } : m
+            ),
+          },
+        };
+      });
+    },
+  };
+});

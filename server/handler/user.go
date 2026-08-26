@@ -85,7 +85,16 @@ func SearchUsers(c *gin.Context) {
 		return
 	}
 
-	cursor, err := model.Users.Find(c, bson.M{"username": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}})
+	// 同时按 username 和 nickname 模糊匹配（大小写不敏感）
+	escaped := primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}
+	filter := bson.M{
+		"$or": []bson.M{
+			{"username": escaped},
+			{"nickname": escaped},
+		},
+	}
+
+	cursor, err := model.Users.Find(c, filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
 		return

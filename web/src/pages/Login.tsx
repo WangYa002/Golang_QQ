@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/auth';
+import { UserIcon, LockIcon, EyeIcon, EyeOffIcon, AlertIcon, SpinnerIcon } from '../components/icons';
 
 function getPasswordStrength(pwd: string): { level: number; text: string; color: string } {
   if (!pwd) return { level: 0, text: '', color: '' };
@@ -9,9 +10,9 @@ function getPasswordStrength(pwd: string): { level: number; text: string; color:
   if (/[A-Z]/.test(pwd)) score++;
   if (/[0-9]/.test(pwd)) score++;
   if (/[^A-Za-z0-9]/.test(pwd)) score++;
-  if (score <= 1) return { level: 1, text: '弱', color: 'var(--danger)' };
-  if (score <= 3) return { level: 2, text: '中', color: 'var(--warning)' };
-  return { level: 3, text: '强', color: 'var(--success)' };
+  if (score <= 1) return { level: 1, text: '弱', color: '#ef4444' };
+  if (score <= 3) return { level: 2, text: '中', color: '#f59e0b' };
+  return { level: 3, text: '强', color: '#22c55e' };
 }
 
 export default function Login() {
@@ -51,254 +52,261 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg-primary)' }}>
+    <div className="login-page" style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--lp-bg-dark)',
+      overflowX: 'hidden',
+      position: 'relative',
+      padding: '20px',
+      fontFamily: 'var(--lp-font)',
+    }}>
 
-      {/* 左侧展示区 */}
-      <div className="hidden lg:flex flex-1 flex-col items-center justify-center relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a3e 50%, #0f0f1a 100%)' }}>
-
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="absolute rounded-full"
-            style={{
-              width: 8 + i * 4,
-              height: 8 + i * 4,
-              background: `rgba(108, 92, 231, ${0.15 + i * 0.05})`,
-              left: `${15 + i * 14}%`,
-              top: `${20 + (i % 3) * 25}%`,
-              animation: `floatUp ${8 + i * 2}s linear ${i * 1.5}s infinite`,
-            }} />
-        ))}
-
-        <div className="relative z-10 text-center px-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-8"
-            style={{
-              background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
-              boxShadow: '0 8px 32px rgba(108, 92, 231, 0.4)',
-            }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-          <h1 className="text-4xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-            Golang QQ
-          </h1>
-          <p className="text-lg mb-8" style={{ color: 'var(--text-secondary)' }}>
-            基于 Go + React 的即时通讯应用
-          </p>
-          <div className="space-y-4 text-left max-w-xs mx-auto">
-            {[
-              { icon: '💬', title: '实时通讯', desc: 'WebSocket 驱动的即时消息' },
-              { icon: '👥', title: '群组聊天', desc: '创建群组与多人协作' },
-              { icon: '🔒', title: '安全可靠', desc: 'JWT 认证与数据加密' },
-            ].map((feat, i) => (
-              <div key={i} className="flex items-center gap-4 p-3 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
-                <span className="text-2xl">{feat.icon}</span>
-                <div>
-                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{feat.title}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{feat.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ===== 背景特效层 ===== */}
+      <div className="login-bg-grid" />
+      <div className="login-bg-glow login-bg-glow-1" />
+      <div className="login-bg-glow login-bg-glow-2" />
+      <div className="login-particles">
+        {[0,1,2,3,4,5].map(i => <div key={i} className="login-particle" />)}
       </div>
 
-      {/* 右侧表单区 */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="animate-fade-in w-full max-w-[400px]">
+      {/* ===== 主容器 ===== */}
+      <div className="lp-container">
+        {/* 流线边框动画 */}
+        <div className="lp-streamline-border" />
 
-          {/* Logo (mobile) */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
-              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+        {/* ===== 左侧：项目介绍 ===== */}
+        <div className="lp-left">
+          <div>
+            {/* 品牌头 */}
+            <div className="lp-brand">
+              <div className="lp-brand-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth="2.5" style={{ width: 26, height: 26, color: 'white' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <div className="lp-brand-text">
+                <h2>Golang QQ</h2>
+                <span>GO IM PROJECT</span>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Golang QQ</h1>
-          </div>
 
-          {/* Tab 切换 */}
-          <div className="flex mb-8 p-1 rounded-xl" style={{ background: 'var(--bg-tertiary)' }}>
-            {(['login', 'register'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => { setActiveTab(tab); setError(''); }}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium cursor-pointer"
-                style={{
-                  background: activeTab === tab ? 'var(--accent)' : 'transparent',
-                  color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
-                  boxShadow: activeTab === tab ? '0 2px 10px rgba(108, 92, 231, 0.3)' : 'none',
-                }}
-              >
-                {tab === 'login' ? '登录' : '注册'}
-              </button>
-            ))}
+            {/* 标题 + 描述 */}
+            <h1 className="lp-title">
+              基于 <span className="lp-highlight">Golang</span><br />的高性能即时通讯
+            </h1>
+            <p className="lp-subtitle">
+              采用 Go 语言构建的分布式即时通讯系统，支持百万级并发连接，毫秒级消息投递，为开发者提供稳定可靠的实时通信解决方案。
+            </p>
+
+            {/* 特性列表 */}
+            <ul className="lp-feature-list">
+              {[
+                { icon: '⚡', color: 'green',  title: '百万级并发', desc: '基于 Goroutine 的轻量级协程调度',
+                  svg: <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /> },
+                { icon: '🔒', color: 'blue',   title: '端到端加密', desc: 'AES-256 + RSA 双层加密传输',
+                  svg: <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
+                { icon: '📦', color: 'purple', title: '分布式架构', desc: '微服务 + Redis 集群 + Kafka 消息队列',
+                  svg: <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                { icon: '🛡', color: 'orange', title: '高可用保障', desc: '99.99% SLA，自动故障转移与恢复',
+                  svg: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /> },
+              ].map((f) => (
+                <li key={f.title} className="lp-feature-item">
+                  <div className={`lp-feature-icon ${f.color}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+                      {f.svg}
+                    </svg>
+                  </div>
+                  <div className="lp-feature-text">
+                    <strong>{f.title}</strong>
+                    <span>{f.desc}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* ===== 右侧：登录/注册表单 ===== */}
+        <div className="lp-right">
+          {/* 标题 */}
+          <div style={{ marginBottom: '32px' }}>
+            <h2 style={{ color: 'var(--lp-text-primary)', fontSize: '28px', fontWeight: 700, marginBottom: '10px' }}>
+              {activeTab === 'login' ? '欢迎回来' : '创建账号'}
+            </h2>
+            <p style={{ color: 'var(--lp-text-muted)', fontSize: '16px' }}>
+              {activeTab === 'login' ? '登录您的 Golang QQ 账号' : '填写信息即可快速注册'}
+            </p>
           </div>
 
           {/* 错误提示 */}
           {error && (
-            <div className="animate-fade-in mb-5 p-3 rounded-xl text-sm flex items-center gap-2"
-              style={{ background: 'rgba(255,107,107,0.12)', color: 'var(--danger)', border: '1px solid rgba(255,107,107,0.2)' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
+            <div className="lp-error">
+              <AlertIcon size={16} />
               {error}
             </div>
           )}
 
-          {/* 表单 */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                用户名
-              </label>
-              <input
-                type="text"
-                placeholder="请输入用户名"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl outline-none text-sm"
-                style={{
-                  background: 'var(--bg-input)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border)',
-                }}
-                required
-              />
-            </div>
-
-            {activeTab === 'register' && (
-              <div className="animate-fade-in">
-                <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                  昵称
-                </label>
+          <form onSubmit={handleSubmit}>
+            {/* 用户名 */}
+            <div className="lp-form-group">
+              <label htmlFor="lp-username">用户名</label>
+              <div className="lp-input-wrap">
                 <input
                   type="text"
-                  placeholder="请输入昵称"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl outline-none text-sm"
-                  style={{
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border)',
-                  }}
+                  id="lp-username"
+                  placeholder="请输入用户名"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   required
                 />
+                <span className="lp-input-icon">
+                  <UserIcon size={20} />
+                </span>
+              </div>
+            </div>
+
+            {/* 昵称（仅注册） */}
+            {activeTab === 'register' && (
+              <div className="lp-form-group">
+                <label htmlFor="lp-nickname">昵称</label>
+                <div className="lp-input-wrap">
+                  <input
+                    type="text"
+                    id="lp-nickname"
+                    placeholder="请输入昵称"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    required
+                  />
+                  <span className="lp-input-icon">
+                    <UserIcon size={20} />
+                  </span>
+                </div>
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                密码
-              </label>
-              <div className="relative">
+            {/* 密码 */}
+            <div className="lp-form-group">
+              <label htmlFor="lp-password">密码</label>
+              <div className="lp-input-wrap">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="请输入密码"
+                  id="lp-password"
+                  placeholder={activeTab === 'login' ? '输入您的密码' : '设置密码'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-11 rounded-xl outline-none text-sm"
-                  style={{
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border)',
-                  }}
+                  style={{ paddingRight: '48px' }}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  {showPassword ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
+                <span className="lp-input-icon">
+                  <LockIcon size={20} />
+                </span>
+                <button type="button" className="lp-pwd-toggle" onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? <EyeOffIcon size={20} /> : <EyeIcon size={20} />}
                 </button>
               </div>
+
+              {/* 密码强度（注册） */}
               {activeTab === 'register' && password && (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 flex gap-1">
-                    {[1, 2, 3].map((lvl) => (
-                      <div key={lvl} className="flex-1 h-1 rounded-full"
-                        style={{ background: strength.level >= lvl ? strength.color : 'var(--bg-tertiary)' }} />
+                <div className="lp-strength-bar animate-fade-in">
+                  <div className="lp-bar">
+                    {[1, 2, 3].map(lvl => (
+                      <div key={lvl} className="lp-bar-seg"
+                        style={{ background: strength.level >= lvl ? strength.color : 'var(--lp-border)' }} />
                     ))}
                   </div>
-                  <span className="text-xs" style={{ color: strength.color }}>{strength.text}</span>
+                  <span style={{ fontSize: '12px', color: strength.color }}>{strength.text}</span>
                 </div>
               )}
             </div>
 
+            {/* 确认密码（仅注册） */}
             {activeTab === 'register' && (
-              <div className="animate-fade-in">
-                <label className="block text-xs font-medium mb-1.5 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                  确认密码
-                </label>
-                <input
-                  type="password"
-                  placeholder="再次输入密码"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl outline-none text-sm"
-                  style={{
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border)',
-                  }}
-                  required
-                />
+              <div className="lp-form-group animate-fade-in">
+                <label htmlFor="lp-confirm-pwd">确认密码</label>
+                <div className="lp-input-wrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    id="lp-confirm-pwd"
+                    placeholder="再次输入密码"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <span className="lp-input-icon">
+                    <LockIcon size={20} />
+                  </span>
+                </div>
                 {confirmPassword && confirmPassword !== password && (
-                  <p className="text-xs mt-1 ml-1" style={{ color: 'var(--danger)' }}>密码不一致</p>
+                  <p style={{ fontSize: '12px', color: '#fca5a5', marginTop: '6px' }}>密码不一致</p>
                 )}
               </div>
             )}
 
+            {/* 记住我 + 忘记密码（仅登录） */}
             {activeTab === 'login' && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded cursor-pointer"
-                  style={{ accentColor: 'var(--accent)' }}
-                />
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>记住登录</span>
+              <div className="lp-options-row">
+                <label className="lp-remember">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                  <span>记住我</span>
+                </label>
+                <button type="button" className="lp-forgot" onClick={(e) => e.preventDefault()}>
+                  忘记密码？
+                </button>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl font-medium cursor-pointer text-white text-sm"
-              style={{
-                background: loading
-                  ? 'var(--accent-dark)'
-                  : 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
-                boxShadow: loading ? 'none' : '0 4px 15px rgba(108, 92, 231, 0.4)',
-                opacity: loading ? 0.7 : 1,
-              }}
-            >
+            {/* 提交按钮 */}
+            <button type="submit" disabled={loading} className="lp-submit-btn">
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" strokeDasharray="31.4" strokeDashoffset="10" />
-                  </svg>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <SpinnerIcon size={16} className="animate-spin" />
                   处理中...
                 </span>
-              ) : activeTab === 'login' ? '登 录' : '注 册'}
+              ) : activeTab === 'login' ? '登录' : '注册'}
             </button>
           </form>
+
+          {/* 分隔线 */}
+          <div className="lp-divider">
+            <span>或</span>
+          </div>
+
+          {/* 社交登录 */}
+          <div className="lp-social">
+            <button className="lp-social-btn" title="GitHub">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </button>
+            <button className="lp-social-btn" title="微信">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 01.213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 00.167-.054l1.903-1.114a.864.864 0 01.717-.098 10.16 10.16 0 002.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178A1.17 1.17 0 014.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178 1.17 1.17 0 01-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 01.598.082l1.584.926a.272.272 0 00.14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 01-.023-.156.49.49 0 01.201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.269-.03-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.982.969-.982z"/>
+              </svg>
+            </button>
+            <button className="lp-social-btn" title="QQ">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.003 2c-2.265 0-6.29 1.364-6.29 7.325v1.195S3.55 14.96 3.55 17.474c0 .665.17 1.025.281 1.025.114 0 .902-.484 1.748-2.072 0 0-.18 2.197 1.904 3.967 0 0-1.77.495-1.77 1.182 0 .686 4.078.43 6.29.43 2.21 0 6.287.257 6.287-.43 0-.687-1.768-1.182-1.768-1.182 2.085-1.77 1.905-3.967 1.905-3.967.845 1.588 1.634 2.072 1.746 2.072.111 0 .283-.36.283-1.025 0-2.514-2.166-6.954-2.166-6.954V9.325C18.29 3.364 14.268 2 12.003 2z"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* 切换登录/注册 */}
+          <div className="lp-switch">
+            {activeTab === 'login' ? '还没有账号？' : '已有账号？'}
+            <button
+              type="button"
+              onClick={() => { setActiveTab(activeTab === 'login' ? 'register' : 'login'); setError(''); }}
+            >
+              {activeTab === 'login' ? '立即注册' : '立即登录'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

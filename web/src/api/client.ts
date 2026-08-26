@@ -1,7 +1,12 @@
+import { useAccountsStore } from '../store/accounts';
+
 const BASE = '/api';
 
 function getToken(): string | null {
-  return localStorage.getItem('token');
+  // 从多账号管理器读取当前 active 账号 token
+  // accounts store 不依赖 client，无循环依赖
+  const acc = useAccountsStore.getState().active();
+  return acc?.token ?? null;
 }
 
 export async function request<T>(

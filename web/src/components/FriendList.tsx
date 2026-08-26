@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { useFriendStore } from '../store/friend';
 import { useChatStore } from '../store/chat';
 import { createConversation } from '../api/conversations';
+import { SearchIcon } from './icons';
+import { hoverHandlers } from '../styles/common';
+
+// 头像颜色池 - 深色主题优化
+const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
 interface Props {
   onOpenProfile: (userId: string) => void;
@@ -42,21 +52,25 @@ export default function FriendList({ onOpenProfile }: Props) {
   };
 
   return (
-    <div className="w-[300px] flex flex-col" style={{ background: 'var(--bg-secondary)' }}>
-      {/* 搜索栏 */}
-      <div className="p-4 pb-2">
+    <div className="flex flex-col"
+      style={{ width: 320, background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)' }}>
+
+      {/* 头部标题 + 搜索 */}
+      <div className="p-4 pb-3">
+        <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>联系人</h2>
         <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24"
-            fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
+            <SearchIcon size={14} />
+          </div>
           <input
             type="text"
             placeholder="搜索联系人..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-xl outline-none text-sm"
-            style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
           />
         </div>
       </div>
@@ -64,48 +78,51 @@ export default function FriendList({ onOpenProfile }: Props) {
       {/* 好友申请 */}
       {requests.length > 0 && (
         <div className="px-3 pb-2">
-          <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5"
+          <div className="text-xs font-semibold mb-2 px-1 flex items-center gap-1.5"
             style={{ color: 'var(--text-muted)' }}>
             好友申请
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-              style={{ background: 'var(--danger)', color: '#fff' }}>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+              style={{ background: 'var(--danger)' }}>
               {requests.length}
             </span>
           </div>
           <div className="space-y-1">
-            {requests.map((req) => (
-              <div key={req.id} className="p-2.5 rounded-xl flex items-center gap-2.5"
-                style={{ background: 'var(--bg-tertiary)' }}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
-                  {req.from_user.nickname?.[0] || req.from_user.username[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                    {req.from_user.nickname || req.from_user.username}
+            {requests.map((req) => {
+              const name = req.from_user.nickname || req.from_user.username;
+              return (
+                <div key={req.id} className="p-2.5 rounded-lg flex items-center gap-2.5"
+                  style={{ background: 'var(--bg-tertiary)' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${getAvatarColor(name)}, ${getAvatarColor(name + 'z')})` }}>
+                    {name[0]?.toUpperCase()}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {name}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => acceptRequest(req.id)}
+                    className="px-2.5 py-1 rounded-md text-[11px] cursor-pointer font-medium text-white"
+                    style={{ background: 'var(--accent)' }}>
+                    同意
+                  </button>
+                  <button
+                    onClick={() => rejectRequest(req.id)}
+                    className="px-2.5 py-1 rounded-md text-[11px] cursor-pointer"
+                    style={{ color: 'var(--text-muted)' }}>
+                    忽略
+                  </button>
                 </div>
-                <button
-                  onClick={() => acceptRequest(req.id)}
-                  className="px-2.5 py-1 rounded-lg text-[11px] cursor-pointer font-medium text-white"
-                  style={{ background: 'var(--accent)' }}>
-                  同意
-                </button>
-                <button
-                  onClick={() => rejectRequest(req.id)}
-                  className="px-2.5 py-1 rounded-lg text-[11px] cursor-pointer"
-                  style={{ color: 'var(--text-muted)' }}>
-                  忽略
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* 好友标题 */}
       <div className="px-4 py-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
           好友
         </span>
         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
@@ -114,7 +131,7 @@ export default function FriendList({ onOpenProfile }: Props) {
       </div>
 
       {/* 好友列表 */}
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-3 py-2">
         {filteredFriends.map((f) => {
           const displayName = f.remark || f.user.nickname || f.user.username;
           const isOnline = !!onlineUsers[f.user.id];
@@ -123,18 +140,17 @@ export default function FriendList({ onOpenProfile }: Props) {
               key={f.id}
               onClick={() => handleStartChat(f.user.id)}
               onContextMenu={(e) => handleContextMenu(e, f.id, f.user.id)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer mb-0.5"
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-0.5"
+              {...hoverHandlers()}
             >
               <div className="relative flex-shrink-0">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold"
-                  style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
+                  style={{ background: `linear-gradient(135deg, ${getAvatarColor(displayName)}, ${getAvatarColor(displayName + 'z')})` }}>
                   {displayName[0]?.toUpperCase()}
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
                   style={{
-                    background: isOnline ? 'var(--success)' : 'var(--text-muted)',
+                    background: isOnline ? 'var(--online)' : 'var(--offline)',
                     borderColor: 'var(--bg-secondary)',
                   }} />
               </div>
@@ -165,7 +181,7 @@ export default function FriendList({ onOpenProfile }: Props) {
       {contextMenu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-          <div className="fixed z-50 py-1.5 rounded-xl"
+          <div className="fixed z-50 py-1.5 rounded-lg"
             style={{
               left: contextMenu.x,
               top: contextMenu.y,
@@ -178,16 +194,16 @@ export default function FriendList({ onOpenProfile }: Props) {
               onClick={() => { handleStartChat(contextMenu.userId); setContextMenu(null); }}
               className="w-full px-4 py-2 text-left text-sm cursor-pointer"
               style={{ color: 'var(--text-primary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              {...hoverHandlers()}
+            >
               发送消息
             </button>
             <button
               onClick={() => { onOpenProfile(contextMenu.userId); setContextMenu(null); }}
               className="w-full px-4 py-2 text-left text-sm cursor-pointer"
               style={{ color: 'var(--text-primary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              {...hoverHandlers()}
+            >
               查看资料
             </button>
             <div className="my-1" style={{ borderTop: '1px solid var(--border)' }} />
@@ -195,8 +211,8 @@ export default function FriendList({ onOpenProfile }: Props) {
               onClick={() => { removeFriend(contextMenu.friendId); setContextMenu(null); }}
               className="w-full px-4 py-2 text-left text-sm cursor-pointer"
               style={{ color: 'var(--danger)' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              {...hoverHandlers({ hoverBg: 'rgba(239,68,68,0.08)' })}
+            >
               删除好友
             </button>
           </div>

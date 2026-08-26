@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -6,6 +6,8 @@ import { uploadFile } from '../api/client';
 import { recallMessage, searchMessages } from '../api/conversations';
 import EmojiPicker from './EmojiPicker';
 import GroupMembers from './GroupMembers';
+import { MessageIcon, UsersIcon, SearchIcon, SendIcon, PaperclipIcon, PhoneIcon, VideoIcon, MoreIcon } from './icons';
+import { inputStyle, hoverHandlers } from '../styles/common';
 import type { Message } from '../types';
 
 function shouldShowTimeSeparator(prev: Message | null, curr: Message): boolean {
@@ -35,6 +37,14 @@ function formatTimeSeparator(dateStr: string): string {
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
+// 头像颜色池
+const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 interface Props {
   onOpenProfile: (userId: string) => void;
 }
@@ -48,6 +58,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
   const conversations = useChatStore((s) => s.conversations);
   const user = useAuthStore((s) => s.user);
   const userNames = useChatStore((s) => s.userNames);
+  const onlineUsers = useChatStore((s) => s.onlineUsers);
   const groupDetails = useChatStore((s) => s.groupDetails);
   const fetchGroupDetails = useChatStore((s) => s.fetchGroupDetails);
   const { send } = useWebSocket();
@@ -55,6 +66,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastTypingRef = useRef<number>(0);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGroupMembers, setShowGroupMembers] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -74,7 +86,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
     }
   }, [currentConvo?.group_id]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!input.trim() || !currentConvoId) return;
     send('chat', {
       conversation_id: currentConvoId,
@@ -82,14 +94,18 @@ export default function ChatArea({ onOpenProfile }: Props) {
       content: input.trim(),
     });
     setInput('');
-  };
+  }, [input, currentConvoId, send]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    } else if (input.trim()) {
-      send('typing', { conversation_id: currentConvoId });
+    } else if (input.trim() && currentConvoId) {
+      const now = Date.now();
+      if (now - lastTypingRef.current > 2000) {
+        lastTypingRef.current = now;
+        send('typing', { conversation_id: currentConvoId });
+      }
     }
   };
 
@@ -133,15 +149,13 @@ export default function ChatArea({ onOpenProfile }: Props) {
 
   const renderMessageContent = (msg: Message) => {
     if (msg.type === 'image') {
-      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-xl cursor-pointer" style={{ boxShadow: 'var(--shadow-sm)' }} />;
+      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-lg cursor-pointer" style={{ boxShadow: 'var(--shadow-sm)' }} />;
     }
     if (msg.type === 'file' && msg.metadata) {
       return (
         <a href={msg.content} download={msg.metadata.file_name} className="inline-flex items-center gap-2 underline"
-          style={{ color: 'var(--accent-light)' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
+          style={{ color: 'var(--accent)' }}>
+          <PaperclipIcon size={14} />
           {msg.metadata.file_name} ({((msg.metadata.file_size ?? 0) / 1024).toFixed(1)} KB)
         </a>
       );
@@ -149,10 +163,10 @@ export default function ChatArea({ onOpenProfile }: Props) {
     if (msg.type === 'system' || msg.type === 'recalled') {
       return <span className="italic" style={{ color: 'var(--text-muted)' }}>{msg.content}</span>;
     }
-    return <span style={{ lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{msg.content}</span>;
+    return <span style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.content}</span>;
   };
 
-  const getConvoName = () => {
+  const getConvoName = useMemo(() => {
     if (!currentConvo) return '';
     if (currentConvo.type === 'group') {
       if (currentConvo.group_id && groupDetails[currentConvo.group_id]) {
@@ -162,138 +176,178 @@ export default function ChatArea({ onOpenProfile }: Props) {
     }
     const otherId = currentConvo.members.find((m) => m !== user?.id);
     return otherId ? (userNames[otherId] || '私聊') : '私聊';
-  };
+  }, [currentConvo, groupDetails, userNames, user?.id]);
 
-  const getConvoSubtitle = () => {
+  const getConvoSubtitle = useMemo(() => {
     if (!currentConvo) return '';
     if (currentConvo.type === 'group' && currentConvo.group_id) {
       const group = groupDetails[currentConvo.group_id];
       if (group) return `${group.members.length} 位成员`;
     }
     return '';
-  };
+  }, [currentConvo, groupDetails]);
+
+  const getSenderName = useCallback((msg: Message) => {
+    if (msg.sender_id === user?.id) return user.nickname || user.username || '我';
+    return userNames[msg.sender_id] || '用户';
+  }, [user, userNames]);
+
+  const decoratedMessages = useMemo(() => {
+    const myId = user?.id;
+    return messages.map((msg, index) => {
+      const isMine = msg.sender_id === myId;
+      const isSystem = msg.type === 'system' || msg.type === 'recalled';
+      const prevMsg = index > 0 ? messages[index - 1] : null;
+      const showTimeSep = shouldShowTimeSeparator(prevMsg, msg);
+      const sameSender = isSameSender(prevMsg, msg);
+      const showAvatar = !isMine && !isSystem && !sameSender;
+      const isLastOfSender = index === messages.length - 1 || !isSameSender(msg, messages[index + 1] || null);
+      const senderName = getSenderName(msg);
+      const avatarColor = getAvatarColor(senderName);
+      return { msg, isMine, isSystem, showTimeSep, sameSender, showAvatar, isLastOfSender, senderName, avatarColor };
+    });
+  }, [messages, user?.id, getSenderName]);
 
   const getOtherOnline = () => {
     if (!currentConvo || currentConvo.type === 'group') return false;
     const otherId = currentConvo.members.find((m) => m !== user?.id);
-    return otherId ? !!useChatStore.getState().onlineUsers[otherId] : false;
+    return otherId ? !!onlineUsers[otherId] : false;
   };
 
   if (!currentConvoId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6"
+      <div className="flex-1 flex flex-col items-center justify-center px-6 chat-messages-bg">
+        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 animate-float"
           style={{ background: 'var(--bg-tertiary)' }}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <MessageIcon size={40} className="text-[var(--text-muted)]" />
         </div>
-        <p className="text-lg font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-          选择一个会话
+        <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+          开始新的对话
+        </h3>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+          从左侧选择一个会话，或发起新的聊天
         </p>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          开始你的对话
-        </p>
+        <div className="flex flex-wrap gap-2 justify-center max-w-sm">
+          {['👋 你好', '在吗？', '最近怎么样'].map((tip) => (
+            <span key={tip} className="px-4 py-2 rounded-full text-sm cursor-pointer"
+              style={{
+                background: 'var(--bg-tertiary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+            >
+              {tip}
+            </span>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex-1 flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+      <div className="flex-1 flex flex-col" style={{ background: 'var(--bg-secondary)', position: 'relative' }}>
 
-        {/* 顶栏 */}
-        <div className="px-6 py-3.5 flex items-center justify-between"
-          style={{ borderBottom: '1px solid var(--border)', background: 'rgba(22, 22, 37, 0.5)', backdropFilter: 'blur(10px)' }}>
+        {/* 顶栏 - 现代深色风格 */}
+        <div className="flex items-center justify-between"
+          style={{
+            height: 64,
+            padding: '0 24px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-secondary)',
+          }}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold"
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
               style={{
                 background: currentConvo?.type === 'group'
-                  ? 'linear-gradient(135deg, #e17055, #d63031)'
-                  : 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
-                color: '#fff',
+                  ? 'linear-gradient(135deg, var(--accent), #6366f1)'
+                  : `linear-gradient(135deg, ${getAvatarColor(getConvoName)}, ${getAvatarColor(getConvoName + 'x')})`,
+                position: 'relative',
               }}>
               {currentConvo?.type === 'group' ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              ) : getConvoName()[0]?.toUpperCase()}
+                <UsersIcon size={16} />
+              ) : getConvoName[0]?.toUpperCase()}
+              {currentConvo?.type === 'private' && getOtherOnline() && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+                  style={{ background: 'var(--online)', borderColor: 'var(--bg-secondary)' }} />
+              )}
             </div>
             <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {getConvoName()}
+              <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)', marginBottom: 2 }}>
+                {getConvoName}
               </h2>
               {typingUsers.length > 0 ? (
-                <span className="text-xs" style={{ color: 'var(--accent-light)', animation: 'pulse 1.5s infinite' }}>
+                <span className="text-xs" style={{ color: 'var(--accent)', animation: 'pulse 1.5s infinite' }}>
                   正在输入...
                 </span>
               ) : currentConvo?.type === 'private' && getOtherOnline() ? (
-                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--success)' }}>
-                  <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
-                  在线
-                </span>
-              ) : getConvoSubtitle() ? (
+                <span className="text-xs" style={{ color: 'var(--success)' }}>在线</span>
+              ) : getConvoSubtitle ? (
                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {getConvoSubtitle()}
+                  {getConvoSubtitle}
                 </span>
               ) : null}
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            {/* 搜索消息 */}
-            <button className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
-              style={{ color: showSearch ? 'var(--accent)' : 'var(--text-muted)' }}
-              onClick={() => setShowSearch(!showSearch)}
-              onMouseEnter={(e) => { if (!showSearch) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              onMouseLeave={(e) => { if (!showSearch) e.currentTarget.style.background = 'transparent'; }}
-              title="搜索消息">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+          <div className="flex items-center gap-2">
+            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
+              title="语音通话">
+              <PhoneIcon size={18} />
             </button>
-            {/* 群成员 */}
+            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
+              title="视频通话">
+              <VideoIcon size={18} />
+            </button>
+            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+              style={{ color: showSearch ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
+              onClick={() => setShowSearch(!showSearch)}
+              title="搜索消息">
+              <SearchIcon size={18} />
+            </button>
             {currentConvo?.type === 'group' && currentConvo.group_id && (
-              <button className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
-                style={{ color: showGroupMembers ? 'var(--accent)' : 'var(--text-muted)' }}
+              <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+                style={{ color: showGroupMembers ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
                 onClick={() => setShowGroupMembers(!showGroupMembers)}
-                onMouseEnter={(e) => { if (!showGroupMembers) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                onMouseLeave={(e) => { if (!showGroupMembers) e.currentTarget.style.background = 'transparent'; }}
                 title="群成员">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
+                <UsersIcon size={18} />
               </button>
             )}
+            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
+              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
+              title="更多操作">
+              <MoreIcon size={18} />
+            </button>
           </div>
         </div>
 
-        {/* 搜索栏 */}
         {showSearch && (
-          <div className="px-6 py-2 flex gap-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+          <div className="px-5 py-2 flex gap-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
             <input
               type="text"
               placeholder="搜索消息..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1 px-3 py-2 rounded-xl outline-none text-sm"
-              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+              className="flex-1 px-3.5 py-2 rounded-md outline-none text-sm"
+              style={inputStyle}
               autoFocus
             />
             <button onClick={handleSearch}
-              className="px-3 py-2 rounded-xl text-sm cursor-pointer"
-              style={{ background: 'var(--accent)', color: '#fff' }}>
+              className="px-4 py-2 rounded-md text-sm cursor-pointer text-white"
+              style={{ background: 'var(--accent)' }}>
               搜索
             </button>
           </div>
         )}
 
-        {/* 搜索结果 */}
         {showSearch && searchResults.length > 0 && (
-          <div className="max-h-40 overflow-y-auto px-6 py-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-tertiary)' }}>
+          <div className="max-h-40 overflow-y-auto px-5 py-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-tertiary)' }}>
             {searchResults.map((msg) => (
               <div key={msg.id} className="py-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
                 <span style={{ color: 'var(--text-muted)' }}>
@@ -306,22 +360,14 @@ export default function ChatArea({ onOpenProfile }: Props) {
           </div>
         )}
 
-        {/* 消息区域 */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.map((msg, index) => {
-            const isMine = msg.sender_id === user?.id;
-            const isSystem = msg.type === 'system' || msg.type === 'recalled';
-            const prevMsg = index > 0 ? messages[index - 1] : null;
-            const showTimeSep = shouldShowTimeSeparator(prevMsg, msg);
-            const sameSender = isSameSender(prevMsg, msg);
-            const showAvatar = !isMine && !isSystem && !sameSender;
-
+        {/* 消息区域 - QQ 点阵背景 */}
+        <div className="flex-1 overflow-y-auto chat-messages-bg" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 15 }}>
+          {decoratedMessages.map(({ msg, isMine, isSystem, showTimeSep, sameSender, showAvatar, isLastOfSender, senderName, avatarColor }) => {
             return (
               <div key={msg.id}>
                 {showTimeSep && (
-                  <div className="flex items-center justify-center py-3">
-                    <span className="text-[11px] px-3 py-1 rounded-full"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                  <div className="flex items-center justify-center" style={{ margin: '10px 0' }}>
+                    <span className="time-divider-tag">
                       {formatTimeSeparator(msg.created_at)}
                     </span>
                   </div>
@@ -329,7 +375,7 @@ export default function ChatArea({ onOpenProfile }: Props) {
 
                 {isSystem && (
                   <div className="flex justify-center py-1">
-                    <span className="text-xs px-3 py-1 rounded-full"
+                    <span className="text-xs px-3 py-1 rounded"
                       style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
                       {msg.content}
                     </span>
@@ -337,45 +383,51 @@ export default function ChatArea({ onOpenProfile }: Props) {
                 )}
 
                 {!isSystem && (
-                  <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 ${sameSender ? 'mt-0.5' : 'mt-2'}`}
-                    onContextMenu={(e) => handleContextMenu(e, msg)}>
+                  <div
+                    className={`flex items-start gap-2.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}
+                    style={{ maxWidth: '70%', alignSelf: isMine ? 'flex-end' : 'flex-start', marginLeft: isMine ? 'auto' : 0 }}
+                    onContextMenu={(e) => handleContextMenu(e, msg)}
+                  >
                     {showAvatar ? (
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', color: '#fff' }}>
-                        {getConvoName()[0]?.toUpperCase()}
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                        style={{ background: `linear-gradient(135deg, ${avatarColor}, ${getAvatarColor(senderName + 'z')})` }}>
+                        {senderName[0]?.toUpperCase()}
                       </div>
                     ) : !isMine ? (
-                      <div className="w-8 flex-shrink-0" />
+                      <div className="w-9 flex-shrink-0" />
                     ) : null}
 
-                    <div className="max-w-[65%]">
+                    <div className="flex flex-col gap-0.5" style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                      {!isMine && showAvatar && currentConvo?.type === 'group' && (
+                        <span className="text-[11px] ml-1" style={{ color: 'var(--text-muted)' }}>
+                          {senderName}
+                        </span>
+                      )}
+
                       <div
+                        className="animate-fade-in"
                         style={{
-                          background: isMine ? 'var(--bubble-mine)' : 'var(--bubble-other)',
+                          background: isMine ? 'linear-gradient(135deg, #3b82f6, #4f46e5)' : 'var(--bubble-other)',
+                          borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                          padding: '12px 16px',
+                          fontSize: 14,
+                          lineHeight: 1.5,
                           color: isMine ? '#fff' : 'var(--text-primary)',
-                          borderRadius: isMine
-                            ? (sameSender ? '18px 4px 4px 18px' : '18px 18px 4px 18px')
-                            : (sameSender ? '4px 18px 18px 4px' : '18px 18px 18px 4px'),
-                          boxShadow: isMine ? '0 2px 12px rgba(108, 92, 231, 0.2)' : 'var(--shadow-sm)',
-                          padding: '10px 16px',
-                          fontSize: '14px',
+                          wordWrap: 'break-word',
                         }}
                       >
                         {renderMessageContent(msg)}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {(index === messages.length - 1 || !isSameSender(msg, messages[index + 1] || null)) && (
-                          <span className={`text-[10px] mt-1 ${isMine ? 'ml-auto' : ''}`}
-                            style={{ color: 'var(--text-muted)' }}>
-                            {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
-                        {isMine && msg.read_by && msg.read_by.length > 1 && (
-                          <span className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                            已读 {msg.read_by.length - 1}
-                          </span>
-                        )}
-                      </div>
+
+                      {isLastOfSender && (
+                        <span className="text-[10px] mt-0.5"
+                          style={{ color: 'var(--text-muted)', marginLeft: isMine ? 'auto' : 0 }}>
+                          {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          {isMine && msg.read_by && msg.read_by.length > 1 && (
+                            <span className="ml-1">已读 {msg.read_by.length - 1}</span>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -385,11 +437,10 @@ export default function ChatArea({ onOpenProfile }: Props) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 右键菜单 */}
         {contextMenu && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-            <div className="fixed z-50 py-1 rounded-xl"
+            <div className="fixed z-50 py-1 rounded-lg"
               style={{
                 left: contextMenu.x,
                 top: contextMenu.y,
@@ -402,58 +453,32 @@ export default function ChatArea({ onOpenProfile }: Props) {
                 onClick={() => handleRecall(contextMenu.msgId)}
                 className="w-full px-4 py-2 text-left text-sm cursor-pointer"
                 style={{ color: 'var(--danger)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
                 撤回
               </button>
             </div>
           </>
         )}
 
-        {/* 输入区域 */}
-        <div className="px-6 py-4" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="flex items-end gap-3">
+        {/* 输入区域 - 现代深色风格 */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+          <div className="flex gap-2 mb-2">
             <input
               ref={fileInputRef}
               type="file"
               className="hidden"
               onChange={handleFileUpload}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0"
-              style={{ color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-              title="上传文件"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-              </svg>
-            </button>
-
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="输入消息..."
-                className="w-full px-4 py-2.5 rounded-xl outline-none text-sm"
-                style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-              />
-            </div>
-
-            {/* 表情 */}
             <div className="relative">
               <button
                 onClick={() => setShowEmoji(!showEmoji)}
-                className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0"
-                style={{ color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                className="toolbar-btn"
                 title="表情">
-                😊
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </button>
               {showEmoji && (
                 <EmojiPicker
@@ -462,28 +487,50 @@ export default function ChatArea({ onOpenProfile }: Props) {
                 />
               )}
             </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="toolbar-btn"
+              title="图片">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="toolbar-btn"
+              title="文件">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            </button>
+          </div>
 
+          <div className="flex items-end gap-3">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息..."
+              rows={1}
+              className="modern-input-box"
+              onInput={(e) => {
+                const target = e.currentTarget;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
+            />
             <button
               onClick={handleSend}
               disabled={!input.trim()}
-              className="w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0"
-              style={{
-                background: input.trim() ? 'linear-gradient(135deg, var(--accent), var(--accent-dark))' : 'var(--bg-tertiary)',
-                color: input.trim() ? '#fff' : 'var(--text-muted)',
-                boxShadow: input.trim() ? '0 2px 10px rgba(108, 92, 231, 0.3)' : 'none',
-              }}
+              className="modern-send-btn"
               title="发送"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
+              <SendIcon size={20} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* 群成员面板 */}
       {showGroupMembers && currentConvo?.group_id && groupDetails[currentConvo.group_id] && (
         <GroupMembers
           groupId={currentConvo.group_id}
