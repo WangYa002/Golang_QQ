@@ -14,6 +14,17 @@ export default function Chat() {
   const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin'>('chat');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'admin';
+
+  // 切账号时回到聊天页，避免管理员视图残留
+  useEffect(() => {
+    setActiveTab('chat');
+    setProfileUserId(null);
+  }, [userId]);
+
+  // 守卫：非管理员强制回到聊天页
+  const effectiveTab = activeTab === 'admin' && !isAdmin ? 'chat' : activeTab;
 
   // 首次挂载 + 账号切换时初始化：拉取当前账号资料与会话列表
   useEffect(() => {
@@ -27,13 +38,13 @@ export default function Chat() {
   return (
     <div className="chat-layout" style={{ background: 'var(--bg-primary)' }}>
       <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+        activeTab={effectiveTab}
+        onTabChange={(tab) => setActiveTab(tab)}
         onOpenProfile={(userId) => setProfileUserId(userId)}
       />
-      {activeTab === 'admin' ? (
+      {effectiveTab === 'admin' ? (
         <Admin />
-      ) : activeTab === 'chat' ? (
+      ) : effectiveTab === 'chat' ? (
         <>
           <ConversationList />
           <ChatArea onOpenProfile={(userId) => setProfileUserId(userId)} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as adminApi from '../api/admin';
+import { useAuthStore } from '../store/auth';
 import { SearchIcon } from '../components/icons';
 import type {
   AdminStats, AdminList, User, Conversation,
@@ -30,6 +31,7 @@ function Badge({ children, color }: { children: React.ReactNode; color: string }
 }
 
 export default function Admin() {
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [tab, setTab] = useState<TabKey>('users');
   const [page, setPage] = useState(1);
@@ -37,6 +39,26 @@ export default function Admin() {
   const [data, setData] = useState<AdminList<unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 权限兜底：非管理员不允许查看管理后台
+  if (!isAdmin) {
+    return (
+      <div className="chat-content flex-1 flex items-center justify-center min-w-0"
+        style={{ background: 'var(--bg-primary)' }}>
+        <div className="text-center px-8">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ background: 'rgba(239,68,68,0.1)' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>无权访问</h2>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>管理后台仅对管理员开放</p>
+        </div>
+      </div>
+    );
+  }
 
   const loadStats = useCallback(async () => {
     try {
