@@ -9,6 +9,7 @@ import FriendList from '../components/FriendList';
 import ProfilePanel from '../components/ProfilePanel';
 import CallOverlay from '../components/CallOverlay';
 import Admin from './Admin';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function Chat() {
   const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin'>('chat');
@@ -16,12 +17,18 @@ export default function Chat() {
   const userId = useAuthStore((s) => s.user?.id);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+  const { send } = useWebSocket();
 
   // 切账号时回到聊天页，避免管理员视图残留
   useEffect(() => {
     setActiveTab('chat');
     setProfileUserId(null);
   }, [userId]);
+
+  // 同步"聊天视图是否激活"：切到联系人/管理页时，来消息应计入未读；切回时当前会话视为已读
+  useEffect(() => {
+    useChatStore.getState().setChatViewActive(activeTab === 'chat');
+  }, [activeTab]);
 
   // 守卫：非管理员强制回到聊天页
   const effectiveTab = activeTab === 'admin' && !isAdmin ? 'chat' : activeTab;
@@ -47,7 +54,7 @@ export default function Chat() {
       ) : effectiveTab === 'chat' ? (
         <>
           <ConversationList />
-          <ChatArea onOpenProfile={(userId) => setProfileUserId(userId)} />
+          <ChatArea send={send} onOpenProfile={(userId) => setProfileUserId(userId)} />
         </>
       ) : (
         <FriendList onOpenProfile={(userId) => setProfileUserId(userId)} />

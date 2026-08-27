@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Conversation, Message, Group } from '../types';
 import * as convoApi from '../api/conversations';
 import * as userApi from '../api/users';
@@ -24,6 +24,7 @@ interface ChatData {
   userNames: Record<string, string>;
   groupDetails: Record<string, Group>;
   unreadCount: Record<string, number>;
+  chatViewActive: boolean;
   initialized: boolean;
 }
 
@@ -36,6 +37,7 @@ const emptySlice = (): ChatData => ({
   userNames: {},
   groupDetails: {},
   unreadCount: {},
+  chatViewActive: true,
   initialized: false,
 });
 
@@ -57,6 +59,7 @@ interface ChatState extends ChatData {
   leaveGroup: (groupId: string, userId: string) => Promise<void>;
   markAsRead: (convoId: string) => void;
   clearMessages: (convoId: string) => void;
+  setChatViewActive: (active: boolean) => void;
   handleMessageRecalled: (convoId: string, msgId: string) => void;
 }
 
@@ -82,6 +85,7 @@ function viewOf(uid: string | null): Partial<ChatState> {
     userNames: s.userNames,
     groupDetails: s.groupDetails,
     unreadCount: s.unreadCount,
+    chatViewActive: s.chatViewActive,
   };
 }
 
@@ -97,7 +101,11 @@ function mutate(
   set(() => viewOf(uid));
 }
 
-export const useChatStore = create<ChatState>((set, get) => {
+const GLOBAL_KEY = '__golang_qq_chat_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<ChatState>> | undefined) ?? create<ChatState>((set, get) => {
   // 订阅账号切换：active 变化时刷新顶层视图为新账号切片
   useAccountsStore.subscribe(() => {
     const uid = useAccountsStore.getState().active()?.userId ?? null;
@@ -145,7 +153,14 @@ export const useChatStore = create<ChatState>((set, get) => {
             : c
         ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
       ];
-      if (slice.currentConvoId !== msg.conversation_id) {
+      const viewing = slice.chatViewActive && slice.currentConvoId === msg.conversation_id;
+      if (viewing) {
+        // 正在查看该会话：未读恒为 0，来消息时主动清除（防历史残留/重复投递）
+        if (slice.unreadCount[msg.conversation_id]) {
+          const { [msg.conversation_id]: _, ...rest } = slice.unreadCount;
+          slice.unreadCount = rest;
+        }
+      } else {
         slice.unreadCount = {
           ...slice.unreadCount,
           [msg.conversation_id]: (slice.unreadCount[msg.conversation_id] || 0) + 1,
@@ -242,6 +257,18 @@ export const useChatStore = create<ChatState>((set, get) => {
       });
     },
 
+    setChatViewActive: (active) => {
+      mutate(set, (s) => {
+        const patch: Partial<ChatData> = { chatViewActive: active };
+        // 回到聊天视图且当前有打开的会话 → 视为已读，清除其未读
+        if (active && s.currentConvoId && s.unreadCount[s.currentConvoId]) {
+          const { [s.currentConvoId]: _, ...rest } = s.unreadCount;
+          patch.unreadCount = rest;
+        }
+        return patch;
+      });
+    },
+
     clearMessages: (convoId) => {
       mutate(set, (s) => {
         const { [convoId]: _, ...rest } = s.messages;
@@ -271,3 +298,5 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
   };
 });
+
+g[GLOBAL_KEY] = useChatStore;

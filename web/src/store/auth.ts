@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { User } from '../types';
 import * as authApi from '../api/auth';
 import * as userApi from '../api/users';
@@ -34,7 +34,11 @@ function syncFromAccounts(): Pick<AuthState, 'token' | 'user' | 'isAuthenticated
   };
 }
 
-export const useAuthStore = create<AuthState>((set) => {
+const GLOBAL_KEY = '__golang_qq_auth_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useAuthStore: UseBoundStore<StoreApi<AuthState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<AuthState>> | undefined) ?? create<AuthState>((set) => {
   const initial = syncFromAccounts();
 
   // 订阅 accounts 变化，保持派生字段同步
@@ -79,3 +83,5 @@ export const useAuthStore = create<AuthState>((set) => {
     },
   };
 });
+
+g[GLOBAL_KEY] = useAuthStore;

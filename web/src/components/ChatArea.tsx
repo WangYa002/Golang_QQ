@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
-import { useWebSocket } from '../hooks/useWebSocket';
 import { uploadFile } from '../api/client';
 import { recallMessage, searchMessages } from '../api/conversations';
 import EmojiPicker from './EmojiPicker';
@@ -49,9 +48,10 @@ function getAvatarColor(name: string) {
 
 interface Props {
   onOpenProfile: (userId: string) => void;
+  send: (type: string, data: unknown) => void;
 }
 
-export default function ChatArea({ onOpenProfile }: Props) {
+export default function ChatArea({ onOpenProfile, send }: Props) {
   const currentConvoId = useChatStore((s) => s.currentConvoId);
   const messageMap = useChatStore((s) => s.messages);
   const messages = currentConvoId ? (messageMap[currentConvoId] || []) : [];
@@ -63,8 +63,6 @@ export default function ChatArea({ onOpenProfile }: Props) {
   const onlineUsers = useChatStore((s) => s.onlineUsers);
   const groupDetails = useChatStore((s) => s.groupDetails);
   const fetchGroupDetails = useChatStore((s) => s.fetchGroupDetails);
-  const { send } = useWebSocket();
-
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

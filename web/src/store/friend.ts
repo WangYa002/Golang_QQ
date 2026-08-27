@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Friend, FriendRequest } from '../types';
 import * as friendApi from '../api/friends';
 
@@ -15,7 +15,11 @@ interface FriendState {
   getPendingCount: () => number;
 }
 
-export const useFriendStore = create<FriendState>((set, get) => ({
+const GLOBAL_KEY = '__golang_qq_friend_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useFriendStore: UseBoundStore<StoreApi<FriendState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<FriendState>> | undefined) ?? create<FriendState>((set, get) => ({
   friends: [],
   requests: [],
   loading: false,
@@ -52,3 +56,5 @@ export const useFriendStore = create<FriendState>((set, get) => ({
 
   getPendingCount: () => get().requests.length,
 }));
+
+g[GLOBAL_KEY] = useFriendStore;

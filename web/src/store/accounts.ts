@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { User } from '../types';
 
 /**
@@ -72,7 +72,11 @@ function persist(state: { accounts: Account[]; activeId: string | null }) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export const useAccountsStore = create<AccountsState>((set, get) => {
+const GLOBAL_KEY = '__golang_qq_accounts_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<AccountsState>> | undefined) ?? create<AccountsState>((set, get) => {
   const initial = loadPersisted();
 
   return {
@@ -133,3 +137,5 @@ export const useAccountsStore = create<AccountsState>((set, get) => {
     },
   };
 });
+
+g[GLOBAL_KEY] = useAccountsStore;

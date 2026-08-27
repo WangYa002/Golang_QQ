@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 export type CallType = 'voice' | 'video';
 export type CallStatus = 'idle' | 'calling' | 'incoming' | 'active' | 'ended';
@@ -111,7 +111,11 @@ function clearTimers() {
   if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
 }
 
-export const useCallStore = create<CallState>((set, get) => ({
+const GLOBAL_KEY = '__golang_qq_call_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useCallStore: UseBoundStore<StoreApi<CallState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<CallState>> | undefined) ?? create<CallState>((set, get) => ({
   status: 'idle',
   callType: null,
   callId: null,
@@ -364,3 +368,5 @@ export const useCallStore = create<CallState>((set, get) => ({
     });
   },
 }));
+
+g[GLOBAL_KEY] = useCallStore;

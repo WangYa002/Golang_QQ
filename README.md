@@ -144,6 +144,7 @@ node friend-api-test.mjs    # 好友 API 矩阵（25 例）
 node friend-add-e2e.mjs     # 加好友端到端（12 例）
 node call-more-test.mjs     # 通话 + 图标功能（26 例）
 node admin-test.mjs         # 管理后台（16 例）
+node unread-test.mjs        # 未读红点（6 例）
 ```
 
 详见 [tests/e2e/README.md](tests/e2e/README.md)。

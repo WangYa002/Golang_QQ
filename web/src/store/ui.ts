@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 /**
  * 全局 UI 弹窗开关 —— 供 Sidebar / ChatArea 的"更多"菜单等跨组件触发。
@@ -12,7 +12,11 @@ interface UIState {
   closeCreateGroup: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+const GLOBAL_KEY = '__golang_qq_ui_store__';
+const g = globalThis as { [k: string]: unknown };
+
+export const useUIStore: UseBoundStore<StoreApi<UIState>> =
+  (g[GLOBAL_KEY] as UseBoundStore<StoreApi<UIState>> | undefined) ?? create<UIState>((set) => ({
   addFriendOpen: false,
   createGroupOpen: false,
   openAddFriend: () => set({ addFriendOpen: true }),
@@ -20,3 +24,5 @@ export const useUIStore = create<UIState>((set) => ({
   openCreateGroup: () => set({ createGroupOpen: true }),
   closeCreateGroup: () => set({ createGroupOpen: false }),
 }));
+
+g[GLOBAL_KEY] = useUIStore;
