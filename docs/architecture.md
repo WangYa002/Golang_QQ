@@ -499,7 +499,13 @@ Tailwind v4 的所有工具类（`p-*` / `px-*` / `py-*` / `m-*` / `mt-*` 等）
 2. **WebSocket 挂在 ChatArea**，切到联系人/管理页时 ChatArea 卸载、WS 断开，
    消息根本收不到。修复：`useWebSocket` 提升到 `Chat.tsx` 页面级常驻，
    ChatArea 改为接收 `send` prop。
-3. **未读计数逻辑增强**（`store/chat.ts`）：
+3. **WS Hub Register 乱序竞态（真正的投递根因）**：浏览器开发模式 StrictMode
+   会短暂创建两个 WS 连接，注册请求可能乱序到达。旧实现 Register 时
+   `close(old.Send)` 会误杀"活着的"新连接，导致该用户从 Hub 注册表中消失，
+   消息广播全部丢失（表现为红点不出现/不消失、时好时坏）。
+   修复：Register 只替换注册表条目，不再关闭旧连接；旧连接随 socket 关闭自行
+   Unregister（配合 `cur == client` 校验不会误删新连接）。
+4. **未读计数逻辑增强**（`store/chat.ts`）：
    - 正在查看的会话未读恒为 0（来消息时主动清除，防历史残留/重复投递）；
    - 新增 `chatViewActive` 标记：切到联系人/管理页时来消息正常计入未读，
      切回聊天页时当前会话自动视为已读。

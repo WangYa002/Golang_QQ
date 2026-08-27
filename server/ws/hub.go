@@ -30,10 +30,9 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
-			// 同一用户已有连接（断线重连 / 多标签页）→ 让旧连接的 WritePump 退出
-			if old, ok := h.Clients[client.UserID]; ok {
-				close(old.Send)
-			}
+			// 直接替换注册表条目：注册请求可能乱序到达（StrictMode 双连接/重连），
+			// 若在这里关闭"旧连接"，可能误杀真正存活的新连接。
+			// 旧连接会在其 socket 关闭后自行 Unregister（有 cur==client 校验，不会误删）。
 			h.Clients[client.UserID] = client
 
 		case client := <-h.Unregister:
