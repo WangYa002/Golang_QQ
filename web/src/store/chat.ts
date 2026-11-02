@@ -73,6 +73,12 @@ function savePrefs(uid: string, prefs: Record<string, ConvoPref>) {
   }
 }
 
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
 interface ChatState extends ChatData {
   /** 当前账号 userId（只读派生） */
   activeUserId: string | null;
@@ -166,8 +172,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
 
     selectConversation: async (id) => {
       mutate(set, (s) => {
-        const { [id]: _, ...rest } = s.unreadCount;
-        return { currentConvoId: id, unreadCount: rest };
+        return { currentConvoId: id, unreadCount: withoutKey(s.unreadCount, id) };
       });
       const cur = getSlice(useAccountsStore.getState().active()?.userId ?? null);
       if (!cur.messages[id]) {
@@ -199,8 +204,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
       const pref = slice.convPrefs[msg.conversation_id];
       let prefsDirty = false;
       if (pref?.hidden) {
-        const { [msg.conversation_id]: _drop, ...restPrefs } = slice.convPrefs;
-        slice.convPrefs = restPrefs;
+        slice.convPrefs = withoutKey(slice.convPrefs, msg.conversation_id);
         prefsDirty = true;
       }
       const muted = !!pref?.muted;
@@ -208,8 +212,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
       if (viewing) {
         // 正在查看该会话：未读恒为 0，来消息时主动清除（防历史残留/重复投递）
         if (slice.unreadCount[msg.conversation_id]) {
-          const { [msg.conversation_id]: _, ...rest } = slice.unreadCount;
-          slice.unreadCount = rest;
+          slice.unreadCount = withoutKey(slice.unreadCount, msg.conversation_id);
         }
       } else if (!muted) {
         slice.unreadCount = {
@@ -245,8 +248,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
 
     setUserOffline: (userId) => {
       mutate(set, (s) => {
-        const { [userId]: _, ...rest } = s.onlineUsers;
-        return { onlineUsers: rest };
+        return { onlineUsers: withoutKey(s.onlineUsers, userId) };
       });
     },
 
@@ -292,8 +294,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
     addGroupMember: async (groupId, userId) => {
       await groupApi.addGroupMember(groupId, userId);
       mutate(set, (s) => {
-        const { [groupId]: _, ...rest } = s.groupDetails;
-        return { groupDetails: rest };
+        return { groupDetails: withoutKey(s.groupDetails, groupId) };
       });
       get().fetchGroupDetails(groupId);
     },
@@ -305,8 +306,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
 
     markAsRead: (convoId) => {
       mutate(set, (s) => {
-        const { [convoId]: _, ...rest } = s.unreadCount;
-        return { unreadCount: rest };
+        return { unreadCount: withoutKey(s.unreadCount, convoId) };
       });
     },
 
@@ -315,8 +315,7 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
         const patch: Partial<ChatData> = { chatViewActive: active };
         // 回到聊天视图且当前有打开的会话 → 视为已读，清除其未读
         if (active && s.currentConvoId && s.unreadCount[s.currentConvoId]) {
-          const { [s.currentConvoId]: _, ...rest } = s.unreadCount;
-          patch.unreadCount = rest;
+          patch.unreadCount = withoutKey(s.unreadCount, s.currentConvoId);
         }
         return patch;
       });
@@ -324,9 +323,8 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
 
     clearMessages: (convoId) => {
       mutate(set, (s) => {
-        const { [convoId]: _, ...rest } = s.messages;
         return {
-          messages: rest,
+          messages: withoutKey(s.messages, convoId),
           // 同步清掉会话列表的最近消息预览（与 QQ 行为一致）
           conversations: s.conversations.map((c) =>
             c.id === convoId ? { ...c, last_message: undefined } : c
@@ -372,11 +370,9 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
       };
       // 从列表移除后不再保留未读与消息缓存；若删除的是当前打开的会话则一并关闭
       if (slice.unreadCount[convoId]) {
-        const { [convoId]: _u, ...restUnread } = slice.unreadCount;
-        slice.unreadCount = restUnread;
+        slice.unreadCount = withoutKey(slice.unreadCount, convoId);
       }
-      const { [convoId]: _m, ...restMsgs } = slice.messages;
-      slice.messages = restMsgs;
+      slice.messages = withoutKey(slice.messages, convoId);
       if (slice.currentConvoId === convoId) slice.currentConvoId = null;
       savePrefs(uid, slice.convPrefs);
       set(() => viewOf(uid));

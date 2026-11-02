@@ -44,12 +44,6 @@ export default function Chat() {
     };
   }, []);
 
-  // 切账号时回到聊天页，避免管理员视图残留
-  useEffect(() => {
-    setActiveTab('chat');
-    setProfileUserId(null);
-  }, [userId]);
-
   // 同步"聊天视图是否激活"：切到联系人/管理页时，来消息应计入未读；切回时当前会话视为已读
   useEffect(() => {
     useChatStore.getState().setChatViewActive(activeTab === 'chat');
@@ -99,6 +93,7 @@ export default function Chat() {
 
         {profileUserId && (
           <ProfilePanel
+            key={profileUserId}
             userId={profileUserId}
             onClose={() => setProfileUserId(null)}
           />

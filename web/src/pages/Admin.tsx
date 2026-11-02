@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as adminApi from '../api/admin';
 import { useAuthStore } from '../store/auth';
 import { SearchIcon } from '../components/icons';
@@ -36,9 +36,43 @@ export default function Admin() {
   const [tab, setTab] = useState<TabKey>('users');
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
-  const [data, setData] = useState<AdminList<unknown> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [result, setResult] = useState<{ key: string; data: AdminList<unknown> | null; error: string } | null>(null);
+  const requestKey = JSON.stringify([tab, page, query.trim(), refreshVersion]);
+  const data = result?.key === requestKey ? result.data : null;
+  const loading = isAdmin && result?.key !== requestKey;
+  const error = result?.key === requestKey ? result.error : '';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    adminApi.getStats()
+      .then((value) => { if (!cancelled) setStats(value); })
+      .catch(() => { /* 忽略统计加载失败 */ });
+    return () => { cancelled = true; };
+  }, [isAdmin, refreshVersion]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    const q = query.trim();
+    const load = async () => {
+      switch (tab) {
+        case 'users': return adminApi.listUsers(page, PAGE_SIZE, q);
+        case 'conversations': return adminApi.listConversations(page, PAGE_SIZE);
+        case 'messages': return adminApi.listMessages(page, PAGE_SIZE, q);
+        case 'groups': return adminApi.listGroups(page, PAGE_SIZE);
+        case 'friends': return adminApi.listFriends(page, PAGE_SIZE);
+        case 'friend_requests': return adminApi.listFriendRequests(page, PAGE_SIZE);
+      }
+    };
+    load().then((value) => {
+      if (!cancelled) setResult({ key: requestKey, data: value as AdminList<unknown>, error: '' });
+    }).catch(() => {
+      if (!cancelled) setResult({ key: requestKey, data: null, error: '加载失败，请确认你有管理员权限' });
+    });
+    return () => { cancelled = true; };
+  }, [isAdmin, tab, page, query, requestKey]);
 
   // 权限兜底：非管理员不允许查看管理后台
   if (!isAdmin) {
@@ -59,39 +93,6 @@ export default function Admin() {
       </div>
     );
   }
-
-  const loadStats = useCallback(async () => {
-    try {
-      setStats(await adminApi.getStats());
-    } catch {
-      // 忽略
-    }
-  }, []);
-
-  useEffect(() => { loadStats(); }, [loadStats]);
-
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    const q = query.trim();
-    const load = (async () => {
-      switch (tab) {
-        case 'users': return adminApi.listUsers(page, PAGE_SIZE, q);
-        case 'conversations': return adminApi.listConversations(page, PAGE_SIZE);
-        case 'messages': return adminApi.listMessages(page, PAGE_SIZE, q);
-        case 'groups': return adminApi.listGroups(page, PAGE_SIZE);
-        case 'friends': return adminApi.listFriends(page, PAGE_SIZE);
-        case 'friend_requests': return adminApi.listFriendRequests(page, PAGE_SIZE);
-      }
-    })();
-    load.then((res) => {
-      setData(res as AdminList<unknown>);
-      setLoading(false);
-    }).catch(() => {
-      setError('加载失败，请确认你有管理员权限');
-      setLoading(false);
-    });
-  }, [tab, page, query]);
 
   const switchTab = (t: TabKey) => {
     setTab(t);
@@ -229,7 +230,7 @@ export default function Admin() {
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>系统数据总览与明细</p>
         </div>
         <button
-          onClick={() => { loadStats(); setQuery(query); }}
+          onClick={() => setRefreshVersion((version) => version + 1)}
           className="px-4 py-2 rounded-xl text-sm font-medium cursor-pointer text-white"
           style={{ background: 'var(--accent)' }}
         >

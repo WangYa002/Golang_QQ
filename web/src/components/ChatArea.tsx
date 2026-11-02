@@ -37,6 +37,10 @@ function isSameSender(prev: Message | null, curr: Message): boolean {
     (new Date(curr.created_at).getTime() - new Date(prev.created_at).getTime()) < 2 * 60 * 1000;
 }
 
+function isRecentMessage(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() <= 2 * 60 * 1000;
+}
+
 function formatTimeSeparator(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -212,7 +216,7 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
 
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     if (msg.sender_id !== user?.id || msg.type === 'system') return;
-    if (Date.now() - new Date(msg.created_at).getTime() > 2 * 60 * 1000) return;
+    if (!isRecentMessage(msg.created_at)) return;
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, msgId: msg.id });
   };

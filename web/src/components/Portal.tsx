@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 interface Props {
@@ -13,7 +13,5 @@ interface Props {
  * 用 Portal 包裹后弹窗挂到 body，层级和定位恢复正常。
  */
 export default function Portal({ children }: Props) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted ? createPortal(children, document.body) : null;
+  return createPortal(children, document.body);
 }

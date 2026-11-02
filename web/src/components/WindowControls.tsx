@@ -19,18 +19,16 @@ declare global {
  */
 export function WindowControls() {
   const [maximized, setMaximized] = useState(false);
-  const [available, setAvailable] = useState(!!window.win);
 
   useEffect(() => {
     if (!window.win) return;
-    setAvailable(true);
     let disposed = false;
     window.win.isMaximized().then((v) => { if (!disposed) setMaximized(v); }).catch(() => {});
     const off = window.win.onMaximizeChange((v) => setMaximized(v));
     return () => { disposed = true; off?.(); };
   }, []);
 
-  if (!available) return null;
+  if (!window.win) return null;
 
   return (
     <div className="win-controls">

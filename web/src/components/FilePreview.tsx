@@ -122,5 +122,3 @@ export default function FilePreview({ url, fileName, fileType: ftProp, onClose }
     </div>
   );
 }
-
-export { detectType };

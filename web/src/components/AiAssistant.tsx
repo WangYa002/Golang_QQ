@@ -68,7 +68,12 @@ export default function AiAssistant({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    if (showKb) loadDocs();
+    if (!showKb) return;
+    let cancelled = false;
+    listAiDocs()
+      .then((items) => { if (!cancelled) setDocs(items); })
+      .catch(() => { /* 面板内静默 */ });
+    return () => { cancelled = true; };
   }, [showKb]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

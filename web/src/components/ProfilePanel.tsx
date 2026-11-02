@@ -23,34 +23,22 @@ export default function ProfilePanel({ userId, onClose }: Props) {
   const selectConversation = useChatStore((s) => s.selectConversation);
   const isMe = userId === currentUser?.id;
 
-  const [user, setUser] = useState<User | null>(null);
+  const [otherUser, setOtherUser] = useState<User | null>(null);
+  const user = isMe ? currentUser ?? null : otherUser;
   const [editing, setEditing] = useState(false);
-  const [nickname, setNickname] = useState('');
-  const [bio, setBio] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [nickname, setNickname] = useState(currentUser?.nickname ?? '');
+  const [bio, setBio] = useState(currentUser?.bio ?? '');
+  const [loading, setLoading] = useState(!isMe);
 
   useEffect(() => {
-    const load = async () => {
-      if (isMe && currentUser) {
-        setUser(currentUser);
-        setNickname(currentUser.nickname);
-        setBio(currentUser.bio || '');
-        setLoading(false);
-      } else {
-        const u = await getUser(userId);
-        setUser(u);
-        setLoading(false);
-      }
-    };
-    load();
-  }, [userId]);
-
-  // store 里的我更新后（上传头像/保存资料触发 fetchMe）同步显示，但不动编辑中的昵称/签名输入
-  useEffect(() => {
-    if (isMe && currentUser) {
-      setUser(currentUser);
-    }
-  }, [isMe, currentUser]);
+    if (isMe) return;
+    let cancelled = false;
+    getUser(userId)
+      .then((loaded) => { if (!cancelled) setOtherUser(loaded); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isMe, userId]);
 
   const handleSave = async () => {
     await updateMe({ nickname, bio });

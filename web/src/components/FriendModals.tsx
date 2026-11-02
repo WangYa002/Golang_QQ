@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import * as userApi from '../api/users';
 import { createConversation } from '../api/conversations';
 import { useChatStore } from '../store/chat';
@@ -33,15 +33,14 @@ export default function FriendModals() {
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [groupSearchResults, setGroupSearchResults] = useState<User[]>([]);
 
-  useEffect(() => {
-    if (showSearch) {
-      setSearchQuery('');
-      setSearchResults([]);
-      setFriendError('');
-    }
-  }, [showSearch]);
-
   const sendRequest = useFriendStore((s) => s.sendRequest);
+
+  const handleCloseAddFriend = () => {
+    closeAddFriend();
+    setSearchQuery('');
+    setSearchResults([]);
+    setFriendError('');
+  };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -53,9 +52,7 @@ export default function FriendModals() {
     const convo = await createConversation(userId);
     await fetchConversations();
     selectConversation(convo.id);
-    closeAddFriend();
-    setSearchQuery('');
-    setSearchResults([]);
+    handleCloseAddFriend();
   };
 
   const handleSendFriendRequest = async (userId: string) => {
@@ -102,7 +99,7 @@ export default function FriendModals() {
   return (
     <>
       {/* 搜索用户（加好友） */}
-      <Modal open={showSearch} title="搜索用户" onClose={closeAddFriend}>
+      <Modal open={showSearch} title="搜索用户" onClose={handleCloseAddFriend}>
         {friendError && (
           <div className="mb-3 rounded-md px-3 py-2 text-xs" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
             {friendError}

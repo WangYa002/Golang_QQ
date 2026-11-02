@@ -73,10 +73,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 function AppInner() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id);
   if (Capacitor.isNativePlatform() || new URLSearchParams(window.location.search).has('mobile')) {
     return <MobileApp authenticated={isAuthenticated} />;
   }
-  return isAuthenticated ? <Chat /> : <Login />;
+  return isAuthenticated ? <Chat key={userId} /> : <Login />;
 }
 
 export default function App() {
