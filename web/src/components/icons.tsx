@@ -135,6 +135,15 @@ export function DashboardIcon({ size = 20, className }: IconProps) {
   );
 }
 
+/** 裂缝分割展示 */
+export function ModelIcon({ size = 20, className }: IconProps) {
+  return <svg {...base(size)} className={className}>
+    <rect x="3" y="3" width="18" height="18" rx="3" />
+    <path d="m5 17 5-5 3 2 3-6 3-1" />
+    <circle cx="16" cy="8" r="1" />
+  </svg>;
+}
+
 /** 搜索（放大镜） */
 export function SearchIcon({ size = 20, className }: IconProps) {
   return (

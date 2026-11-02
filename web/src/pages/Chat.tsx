@@ -9,10 +9,11 @@ import FriendList from '../components/FriendList';
 import ProfilePanel from '../components/ProfilePanel';
 import CallOverlay from '../components/CallOverlay';
 import Admin from './Admin';
+import ModelShowcase from './ModelShowcase';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function Chat() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin' | 'model'>('chat');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
   const user = useAuthStore((s) => s.user);
@@ -51,6 +52,8 @@ export default function Chat() {
       />
       {effectiveTab === 'admin' ? (
         <Admin />
+      ) : effectiveTab === 'model' ? (
+        <ModelShowcase />
       ) : effectiveTab === 'chat' ? (
         <>
           <ConversationList />

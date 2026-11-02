@@ -9,6 +9,11 @@ function getToken(): string | null {
   return acc?.token ?? null;
 }
 
+export function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit = {}

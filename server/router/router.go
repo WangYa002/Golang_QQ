@@ -63,6 +63,10 @@ func Setup(r *gin.Engine) {
 			}
 
 			authorized.POST("/upload", handler.UploadFile)
+
+			model := authorized.Group("/model")
+			model.GET("/weights", handler.ModelWeights)
+			model.POST("/predict", handler.ModelPredict)
 		}
 
 		admin := api.Group("/admin")

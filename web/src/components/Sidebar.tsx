@@ -6,14 +6,14 @@ import { useUIStore } from '../store/ui';
 import * as userApi from '../api/users';
 import { createConversation } from '../api/conversations';
 import type { User } from '../types';
-import { MessageIcon, UsersIcon, UserPlusIcon, UserIcon, LogoutIcon, CloseIcon, CheckIcon, DashboardIcon } from './icons';
+import { MessageIcon, UsersIcon, UserPlusIcon, UserIcon, LogoutIcon, CloseIcon, CheckIcon, DashboardIcon, ModelIcon } from './icons';
 import { inputStyle, hoverHandlers } from '../styles/common';
 import AccountSwitcher from './AccountSwitcher';
 import Portal from './Portal';
 
 interface Props {
-  activeTab: 'chat' | 'contacts' | 'admin';
-  onTabChange: (tab: 'chat' | 'contacts' | 'admin') => void;
+  activeTab: 'chat' | 'contacts' | 'admin' | 'model';
+  onTabChange: (tab: 'chat' | 'contacts' | 'admin' | 'model') => void;
   onOpenProfile: (userId: string) => void;
 }
 
@@ -165,6 +165,15 @@ export default function Sidebar({ activeTab, onTabChange, onOpenProfile }: Props
       </button>
 
       {/* 管理后台（仅管理员） */}
+      <button
+        onClick={() => onTabChange('model')}
+        className={`nav-item-qq ${activeTab === 'model' ? 'active' : ''}`}
+        aria-label="裂缝分割"
+        title="裂缝分割"
+      >
+        <ModelIcon size={20} />
+      </button>
+
       {user?.role === 'admin' && (
         <button
           onClick={() => onTabChange('admin')}

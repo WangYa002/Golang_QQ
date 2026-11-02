@@ -6,3 +6,6 @@ dist/
 uploads/
 .claude/
 .worktrees/
+__pycache__/
+*.pth
+model-service/.venv/
