@@ -43,6 +43,8 @@ const END_REASON_TEXT: Record<string, string> = {
   timeout: '对方无人接听',
   hangup: '通话已结束',
   failed: '无法访问音视频设备',
+  answered_elsewhere: '已在其他设备接听',
+  insecure: '当前为 HTTP 连接，浏览器禁止访问摄像头/麦克风。请使用 HTTPS 或 localhost 访问',
 };
 
 export default function CallOverlay() {

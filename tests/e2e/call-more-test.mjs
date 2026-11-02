@@ -5,7 +5,7 @@ import puppeteer from 'puppeteer-core';
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const OUT = fileURLToPath(new URL('./', import.meta.url));
-const BASE = 'http://localhost:5173';
+const BASE = process.env.BASE_URL ?? 'http://localhost:5173';
 const API = 'http://localhost:8080';
 let passed = 0;
 let failed = 0;
@@ -71,7 +71,8 @@ hookErrors(pP, 'P'); hookErrors(pQ, 'Q'); hookErrors(pR, 'R');
 async function login(page, acc) {
   await page.goto(BASE, { waitUntil: 'networkidle0' });
   await page.evaluate(({ token, user }) => {
-    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], activeId: user.id }));
+    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], lastActive: user.id }));
+    sessionStorage.setItem('golang_qq_active', user.id);
   }, acc);
   await page.reload({ waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 2200));
@@ -79,7 +80,7 @@ async function login(page, acc) {
 
 async function openPrivateChat(page, nickname) {
   const clicked = await page.evaluate((name) => {
-    const rows = [...document.querySelectorAll('.conversation-pane div[style*="padding: 12px"]')];
+    const rows = [...document.querySelectorAll('.conversation-pane .convo-item')];
     const row = rows.find((el) => el.textContent?.includes(name)) ?? rows[0];
     if (row) { row.click(); return true; }
     return false;
@@ -162,12 +163,15 @@ await pQ.click('button[title="挂断"]');
 await wait(1500);
 await waitOverlayGone(pP);
 
-console.log('\n=== 5. 群聊通话提示 ===\n');
+console.log('\n=== 5. 群聊通话按钮禁用 ===\n');
 await openPrivateChat(pP, 'IC测试群');
-await pP.click('button[title="语音通话"]');
 await wait(600);
-check('群聊点通话出现提示', await pP.evaluate(() => document.body.textContent.includes('群聊暂不支持通话')));
-await wait(3000);
+const groupCallDisabled = await pP.evaluate(() => {
+  const btn = document.querySelector('button[title="群聊暂不支持通话"]');
+  return !!btn && btn.disabled;
+});
+check('群聊中通话按钮为禁用态（不弹 toast）', groupCallDisabled);
+await wait(1000);
 
 console.log('\n=== 6. 更多菜单：添加好友 / 发起群聊 / 标为已读 / 清空记录 ===\n');
 await openPrivateChat(pP, 'IC-Quinn');
@@ -186,7 +190,7 @@ await pP.evaluate(() => {
 });
 await wait(800);
 check('添加好友弹窗打开', await pP.evaluate(() => !!document.querySelector('input[placeholder="输入用户名或昵称"]')));
-await pP.evaluate(() => { document.querySelector('.fixed.inset-0')?.click(); });
+await pP.keyboard.press('Escape');
 await wait(500);
 await pP.click('button[title="更多操作"]');
 await wait(600);
@@ -197,7 +201,7 @@ await pP.evaluate(() => {
 });
 await wait(800);
 check('发起群聊弹窗打开', await pP.evaluate(() => document.body.textContent.includes('创建群聊')));
-await pP.evaluate(() => { document.querySelector('.fixed.inset-0')?.click(); });
+await pP.keyboard.press('Escape');
 await wait(500);
 
 // 发送一条消息 → 清空聊天记录
@@ -212,6 +216,18 @@ await pP.evaluate(() => {
   const menus = [...document.querySelectorAll('div')].filter((d) => d.className.includes('absolute right-0'));
   const el = menus[menus.length - 1];
   [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === '清空聊天记录')?.click();
+});
+await wait(600);
+// 危险操作确认弹窗：出现后点击弹窗内「清空」确认
+const confirmShown = await pP.evaluate(() => {
+  const panel = document.querySelector('.ui-modal-panel');
+  return !!panel && panel.textContent.includes('不可恢复');
+});
+check('清空记录出现确认弹窗', confirmShown);
+await pP.evaluate(() => {
+  const panel = document.querySelector('.ui-modal-panel');
+  if (!panel) return;
+  [...panel.querySelectorAll('button')].find((b) => b.textContent?.trim() === '清空')?.click();
 });
 await wait(1000);
 check('清空后消息消失', !(await pP.evaluate(() => document.body.textContent.includes('这是要清空的测试消息'))));

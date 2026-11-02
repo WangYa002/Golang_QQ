@@ -4,7 +4,7 @@ import puppeteer from 'puppeteer-core';
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const OUT = fileURLToPath(new URL('./', import.meta.url));
-const BASE = 'http://localhost:5173';
+const BASE = process.env.BASE_URL ?? 'http://localhost:5173';
 const API = 'http://localhost:8080';
 let passed = 0;
 let failed = 0;
@@ -31,7 +31,8 @@ page.on('pageerror', (e) => errors.push(String(e)));
 async function loginPage(acc) {
   await page.goto(BASE, { waitUntil: 'networkidle0' });
   await page.evaluate(({ token, user }) => {
-    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], activeId: user.id }));
+    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], lastActive: user.id }));
+    sessionStorage.setItem('golang_qq_active', user.id);
   }, acc);
   await page.reload({ waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 2500));

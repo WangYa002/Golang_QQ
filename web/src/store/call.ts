@@ -175,11 +175,23 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
     const s = get();
     if (s.status !== 'incoming') return;
     clearTimers();
+    // 非安全上下文（HTTP 非 localhost）下浏览器禁用摄像头/麦克风，提前给出明确原因
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      sendFn?.('call_event', { conversation_id: s.conversationId, call_id: s.callId, kind: 'reject', reason: 'no_device' });
+      set({ status: 'ended', endedReason: 'insecure' });
+      return;
+    }
     const constraints: MediaStreamConstraints = s.callType === 'video'
       ? { audio: true, video: { width: { ideal: 640 }, height: { ideal: 480 } } }
       : { audio: true };
     const conn = await setupPeerConnection(set, get, constraints);
-    if (!conn) return;
+    if (!conn) {
+      // 设备获取失败：通知对方结束（否则主叫傻等 60s），本端给出失败提示
+      sendFn?.('call_event', { conversation_id: s.conversationId, call_id: s.callId, kind: 'hangup', reason: 'failed' });
+      set({ status: 'ended', endedReason: 'failed' });
+      return;
+    }
+    // 发 accept；offer/answer 协商由 call_signal 分支驱动（主叫 createOffer → 被叫 setRemote+createAnswer）
     sendFn?.('call_event', { conversation_id: s.conversationId, call_id: s.callId, kind: 'accept' });
     set({ status: 'active', elapsed: 0 });
     timer = setInterval(() => set({ elapsed: get().elapsed + 1 }), 1000);
@@ -227,8 +239,9 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
         const callType = d.call_type as CallType;
         const from = d.from_user as { id: string; nickname?: string; username?: string } | undefined;
         const peerName = from?.nickname || from?.username || '对方';
-        // 忙线：已在通话/振铃中 → 自动拒绝
-        if (s.status !== 'idle') {
+        // 忙线：仅「正在通话」才拒（挂断提示窗口/残留振铃不拦截新来电；
+        // busy 的最终判定在服务端，这里只是本端正忙时的礼貌回拒）
+        if (s.status === 'active') {
           sendFn?.('call_event', {
             conversation_id: d.conversation_id,
             call_id: d.call_id,
@@ -237,6 +250,8 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
           });
           return;
         }
+        // 多端同账号：同一路振铃只会投递到一台（服务端登记），
+        // 收到重复/残留状态时直接进入新来电（覆盖旧状态）
         clearTimers();
         set({
           status: 'incoming',
@@ -262,6 +277,12 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
       }
       case 'call_accepted': {
         const s = get();
+        // 多端同账号：这一路已在别的设备接听 → 本端（仍在振铃）同步收线
+        if (s.status === 'incoming' && d.call_id === s.callId) {
+          clearTimers();
+          set({ status: 'ended', endedReason: 'answered_elsewhere', localStream: null, remoteStream: null });
+          return;
+        }
         if (s.status !== 'calling' || (d.call_id && s.callId && d.call_id !== s.callId)) return;
         clearTimers();
         const constraints: MediaStreamConstraints = s.callType === 'video'
@@ -275,7 +296,7 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
             sendSignal(get, { type: 'offer', sdp: offer.sdp });
-            // 缓冲的 ICE（可能在 offer 前到达）
+            // 缓冲的 ICE（可能在 offer 前到达；answer 到后再 setRemoteDescription 时用）
             for (const c of pendingCandidates) {
               try { await conn.addIceCandidate(c); } catch { /* ignore */ }
             }
@@ -332,6 +353,11 @@ export const useCallStore: UseBoundStore<StoreApi<CallState>> =
               pendingCandidates = [];
             } else if (signal.type === 'answer' && signal.sdp) {
               await pc!.setRemoteDescription({ type: 'answer', sdp: signal.sdp });
+              // answer 到达 → 之前缓存的 ICE candidate 可以补上
+              for (const c of pendingCandidates) {
+                try { await pc!.addIceCandidate(c); } catch { /* ignore */ }
+              }
+              pendingCandidates = [];
             } else if (signal.type === 'ice' && signal.candidate) {
               if (pc!.remoteDescription) {
                 await pc!.addIceCandidate(signal.candidate);

@@ -10,6 +10,15 @@ import ProfilePanel from '../components/ProfilePanel';
 import CallOverlay from '../components/CallOverlay';
 import Admin from './Admin';
 import { useWebSocket } from '../hooks/useWebSocket';
+import TopBar from '../components/TopBar';
+import FriendModals from '../components/FriendModals';
+import { Mascot } from '../components/Mascot';
+
+interface AiPush {
+  title: string;
+  content: string;
+  ts: string;
+}
 
 export default function Chat() {
   const [activeTab, setActiveTab] = useState<'chat' | 'contacts' | 'admin'>('chat');
@@ -18,6 +27,22 @@ export default function Chat() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
   const { send } = useWebSocket();
+
+  // 小Q 主动推送（早报等）：顶部卡片展示 10s
+  const [aiPush, setAiPush] = useState<AiPush | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onPush = (e: Event) => {
+      setAiPush((e as CustomEvent<AiPush>).detail);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setAiPush(null), 10000);
+    };
+    window.addEventListener('qq-ai-push', onPush);
+    return () => {
+      window.removeEventListener('qq-ai-push', onPush);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   // 切账号时回到聊天页，避免管理员视图残留
   useEffect(() => {
@@ -43,32 +68,46 @@ export default function Chat() {
   }, [userId]);
 
   return (
-    <div className="chat-layout" style={{ background: 'var(--bg-primary)' }}>
-      <Sidebar
-        activeTab={effectiveTab}
-        onTabChange={(tab) => setActiveTab(tab)}
-        onOpenProfile={(userId) => setProfileUserId(userId)}
-      />
-      {effectiveTab === 'admin' ? (
-        <Admin />
-      ) : effectiveTab === 'chat' ? (
-        <>
-          <ConversationList />
-          <ChatArea send={send} onOpenProfile={(userId) => setProfileUserId(userId)} />
-        </>
-      ) : (
-        <FriendList onOpenProfile={(userId) => setProfileUserId(userId)} />
+    <div className="app-shell">
+      {/* 小Q 主动推送卡片 */}
+      {aiPush && (
+        <div className="ai-push-card" role="alert" onClick={() => setAiPush(null)}>
+          <Mascot size={38} floating />
+          <div className="ai-push-body">
+            <div className="ai-push-title">{aiPush.title}</div>
+            <div className="ai-push-content">{aiPush.content}</div>
+          </div>
+        </div>
       )}
-
-      {profileUserId && (
-        <ProfilePanel
-          userId={profileUserId}
-          onClose={() => setProfileUserId(null)}
+      <TopBar onOpenProfile={(userId) => setProfileUserId(userId)} />
+      <div className="chat-layout">
+        <Sidebar
+          activeTab={effectiveTab}
+          onTabChange={(tab) => setActiveTab(tab)}
+          onOpenProfile={(userId) => setProfileUserId(userId)}
         />
-      )}
+        {effectiveTab === 'admin' ? (
+          <Admin />
+        ) : effectiveTab === 'chat' ? (
+          <>
+            <ConversationList />
+            <ChatArea send={send} onOpenProfile={(userId) => setProfileUserId(userId)} />
+          </>
+        ) : (
+          <FriendList onOpenProfile={(userId) => setProfileUserId(userId)} onEnterChat={() => setActiveTab('chat')} />
+        )}
 
-      {/* 全局通话浮层：任何页面状态都能收到来电 */}
-      <CallOverlay />
+        {profileUserId && (
+          <ProfilePanel
+            userId={profileUserId}
+            onClose={() => setProfileUserId(null)}
+          />
+        )}
+
+        {/* 全局通话浮层：任何页面状态都能收到来电 */}
+        <CallOverlay />
+      </div>
+      <FriendModals />
     </div>
   );
 }

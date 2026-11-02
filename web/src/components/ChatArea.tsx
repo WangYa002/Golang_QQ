@@ -1,12 +1,26 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
-import { uploadFile } from '../api/client';
+import { uploadFile, mediaUrl, avatarSrc } from '../api/client';
+import { uuid } from '../api/uuid';
 import { recallMessage, searchMessages } from '../api/conversations';
+import { getGroupMembers } from '../api/groups';
 import EmojiPicker from './EmojiPicker';
-import GroupMembers from './GroupMembers';
-import { MessageIcon, UsersIcon, SearchIcon, SendIcon, PaperclipIcon, PhoneIcon, VideoIcon, MoreIcon } from './icons';
-import { inputStyle } from '../styles/common';
+import GroupInfoPanel from './GroupInfoPanel';
+import AiAssistant from './AiAssistant';
+import { Mascot } from './Mascot';
+import ScreenshotCrop from './ScreenshotCrop';
+import FilePreview from './FilePreview';
+import {
+  MessageIcon, SearchIcon, SendIcon, PaperclipIcon,
+  SmileIcon, ImageIcon, PhoneIcon, VideoIcon, MoreIcon,
+  ScreenShareIcon, ScreenshotIcon, MicIcon,
+} from './icons';
+import { Avatar } from './ui/Avatar';
+import { Confirm } from './ui/Confirm';
+import { IconButton } from './ui/IconButton';
+import { Input } from './ui/Input';
+import Portal from './Portal';
 import { useCallStore } from '../store/call';
 import { useUIStore } from '../store/ui';
 import type { Message } from '../types';
@@ -30,20 +44,10 @@ function formatTimeSeparator(dateStr: string): string {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const isYesterday = date.toDateString() === yesterday.toDateString();
-
   const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
   if (isToday) return time;
   if (isYesterday) return `昨天 ${time}`;
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
-}
-
-// 头像颜色池
-const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 interface Props {
@@ -60,6 +64,7 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
   const conversations = useChatStore((s) => s.conversations);
   const user = useAuthStore((s) => s.user);
   const userNames = useChatStore((s) => s.userNames);
+  const userAvatars = useChatStore((s) => s.userAvatars);
   const onlineUsers = useChatStore((s) => s.onlineUsers);
   const groupDetails = useChatStore((s) => s.groupDetails);
   const fetchGroupDetails = useChatStore((s) => s.fetchGroupDetails);
@@ -68,13 +73,22 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingRef = useRef<number>(0);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [showGroupMembers, setShowGroupMembers] = useState(false);
+  const [showGroupPanel, setShowGroupPanel] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; msgId: string } | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [notice, setNotice] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  // 截图：抓屏后的完整帧（dataURL），交给框选组件
+  const [shotSrc, setShotSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; fileName: string; type: 'image' | 'unknown' } | null>(null);
+  // 小Q 浮标：拖动位置（null = 默认右下角）
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
+  const [fabDragging, setFabDragging] = useState(false);
+  const fabDragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
 
   const openAddFriend = useUIStore((s) => s.openAddFriend);
   const openCreateGroup = useUIStore((s) => s.openCreateGroup);
@@ -87,19 +101,24 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
     window.setTimeout(() => setNotice(''), 2500);
   };
 
-  useEffect(() => {
-    useCallStore.getState().setSend(send);
-  }, [send]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { useCallStore.getState().setSend(send); }, [send]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const currentConvo = conversations.find((c) => c.id === currentConvoId);
+  const isGroupChat = currentConvo?.type === 'group';
 
   useEffect(() => {
     if (currentConvo?.type === 'group' && currentConvo.group_id) {
       fetchGroupDetails(currentConvo.group_id);
+    }
+  }, [currentConvo?.group_id]);
+
+  // 选择群聊时拉取成员昵称，供消息发送者名显示（不依赖右栏是否展开）
+  useEffect(() => {
+    if (currentConvo?.type === 'group' && currentConvo.group_id) {
+      getGroupMembers(currentConvo.group_id).then((list) => {
+        (list || []).forEach((m) => useChatStore.getState().fetchUserName(m.user_id));
+      });
     }
   }, [currentConvo?.group_id]);
 
@@ -109,6 +128,7 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
       conversation_id: currentConvoId,
       type: 'text',
       content: input.trim(),
+      client_msg_id: uuid(),
     });
     setInput('');
   }, [input, currentConvoId, send]);
@@ -129,7 +149,6 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentConvoId) return;
-
     try {
       const res = await uploadFile(file);
       const msgType = file.type.startsWith('image/') ? 'image' : 'file';
@@ -138,11 +157,51 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
         type: msgType,
         content: res.url,
         metadata: { file_name: file.name, file_size: file.size },
+        client_msg_id: uuid(),
       });
-    } catch {
-      // upload failed silently
-    }
+    } catch { /* upload failed silently */ }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  /** 上传图片文件并以图片消息发送（文件上传 / 截图共用） */
+  const sendImageFile = async (file: File) => {
+    if (!currentConvoId) return;
+    try {
+      const res = await uploadFile(file);
+      send('chat', {
+        conversation_id: currentConvoId,
+        type: 'image',
+        content: res.url,
+        metadata: { file_name: file.name, file_size: file.size },
+        client_msg_id: uuid(),
+      });
+    } catch { /* upload failed silently */ }
+  };
+
+  /** 屏幕截图：getDisplayMedia 抓取一帧，交给框选组件裁剪后发送 */
+  const startScreenshot = async () => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      showNotice('当前浏览器不支持屏幕截图');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: false,
+      });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+      await new Promise((r) => setTimeout(r, 300)); // 等首帧稳定
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')!.drawImage(video, 0, 0);
+      stream.getTracks().forEach((t) => t.stop());
+      setShotSrc(canvas.toDataURL('image/png'));
+    } catch {
+      showNotice('截图已取消');
+    }
   };
 
   const handleRecall = async (msgId: string) => {
@@ -166,21 +225,33 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
 
   const renderMessageContent = (msg: Message) => {
     if (msg.type === 'image') {
-      return <img src={msg.content} alt="" className="max-w-[280px] max-h-60 rounded-lg cursor-pointer" style={{ boxShadow: 'var(--shadow-sm)' }} />;
+      return (
+        <img
+          src={mediaUrl(msg.content)}
+          alt=""
+          className="max-w-[280px] max-h-60 cursor-zoom-in rounded-lg"
+          style={{ boxShadow: 'var(--shadow-sm)' }}
+          onClick={() => setPreview({ url: mediaUrl(msg.content), fileName: msg.metadata?.file_name || '图片', type: 'image' })}
+        />
+      );
     }
     if (msg.type === 'file' && msg.metadata) {
       return (
-        <a href={msg.content} download={msg.metadata.file_name} className="inline-flex items-center gap-2 underline"
-          style={{ color: 'var(--accent)' }}>
+        <button
+          className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left underline transition-colors"
+          style={{ color: 'var(--accent)', border: 'none', background: 'transparent', fontFamily: 'inherit' }}
+          onClick={() => setPreview({ url: mediaUrl(msg.content), fileName: msg.metadata!.file_name || '文件', type: 'unknown' })}
+        >
           <PaperclipIcon size={14} />
-          {msg.metadata.file_name} ({((msg.metadata.file_size ?? 0) / 1024).toFixed(1)} KB)
-        </a>
+          <span>{msg.metadata.file_name}</span>
+          <span className="text-xs opacity-70">({((msg.metadata.file_size ?? 0) / 1024).toFixed(1)} KB)</span>
+        </button>
       );
     }
     if (msg.type === 'system' || msg.type === 'recalled') {
       return <span className="italic" style={{ color: 'var(--text-muted)' }}>{msg.content}</span>;
     }
-    return <span style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.content}</span>;
+    return <span style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{msg.content}</span>;
   };
 
   const getConvoName = useMemo(() => {
@@ -217,13 +288,17 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
       const prevMsg = index > 0 ? messages[index - 1] : null;
       const showTimeSep = shouldShowTimeSeparator(prevMsg, msg);
       const sameSender = isSameSender(prevMsg, msg);
-      const showAvatar = !isMine && !isSystem && !sameSender;
+      const showAvatar = !isSystem && !sameSender;
       const isLastOfSender = index === messages.length - 1 || !isSameSender(msg, messages[index + 1] || null);
       const senderName = getSenderName(msg);
-      const avatarColor = getAvatarColor(senderName);
-      return { msg, isMine, isSystem, showTimeSep, sameSender, showAvatar, isLastOfSender, senderName, avatarColor };
+      return { msg, isMine, isSystem, showTimeSep, sameSender, showAvatar, isLastOfSender, senderName };
     });
   }, [messages, user?.id, getSenderName]);
+
+  const getOtherId = () => {
+    if (!currentConvo || currentConvo.type === 'group') return '';
+    return currentConvo.members.find((m) => m !== user?.id) || '';
+  };
 
   const getOtherOnline = () => {
     if (!currentConvo || currentConvo.type === 'group') return false;
@@ -233,180 +308,93 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
 
   if (!currentConvoId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 chat-messages-bg">
-        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 animate-float"
-          style={{ background: 'var(--bg-tertiary)' }}>
-          <MessageIcon size={40} className="text-[var(--text-muted)]" />
+      <div className="chat-messages-bg flex flex-1 flex-col items-center justify-center px-6">
+        <div className="ui-avatar mb-6 animate-float" style={{ width: 80, height: 80, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+          <MessageIcon size={40} />
         </div>
-        <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-          开始新的对话
-        </h3>
-        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-          从左侧选择一个会话，或发起新的聊天
-        </p>
-        <div className="flex flex-wrap gap-2 justify-center max-w-sm">
-          {['👋 你好', '在吗？', '最近怎么样'].map((tip) => (
-            <span key={tip} className="px-4 py-2 rounded-full text-sm cursor-pointer"
-              style={{
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border)',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-            >
-              {tip}
-            </span>
-          ))}
-        </div>
+        <h3 className="mb-1 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>开始新的对话</h3>
+        <p className="mb-6 text-sm" style={{ color: 'var(--text-muted)' }}>从左侧选择一个会话，或发起新的聊天</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="chat-content flex-1 flex flex-col" style={{ background: 'var(--bg-secondary)', position: 'relative' }}>
+      <div className="chat-content relative flex min-w-0 flex-1 flex-col" style={{ background: 'var(--bg-app)' }}>
 
-        {/* 顶栏 - 现代深色风格 */}
-        <div className="flex items-center justify-between"
-          style={{
-            height: 64,
-            padding: '0 24px',
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--bg-secondary)',
-          }}>
+        {/* 顶栏 */}
+        <div
+          className="flex items-center justify-between"
+          style={{ height: 64, padding: '0 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}
+        >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
-              style={{
-                background: currentConvo?.type === 'group'
-                  ? 'linear-gradient(135deg, var(--accent), #6366f1)'
-                  : `linear-gradient(135deg, ${getAvatarColor(getConvoName)}, ${getAvatarColor(getConvoName + 'x')})`,
-                position: 'relative',
-              }}>
-              {currentConvo?.type === 'group' ? (
-                <UsersIcon size={16} />
-              ) : getConvoName[0]?.toUpperCase()}
-              {currentConvo?.type === 'private' && getOtherOnline() && (
-                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
-                  style={{ background: 'var(--online)', borderColor: 'var(--bg-secondary)' }} />
-              )}
-            </div>
+            <Avatar
+              name={getConvoName}
+              variant={currentConvo?.type === 'group' ? 'group' : 'user'}
+              src={currentConvo?.type === 'private' ? avatarSrc(userAvatars[getOtherId()]) : undefined}
+              size="md"
+              online={getOtherOnline()}
+              showOnlineDot={currentConvo?.type === 'private'}
+            />
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)', marginBottom: 2 }}>
-                {getConvoName}
-              </h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)', marginBottom: 2 }}>{getConvoName}</h2>
               {typingUsers.length > 0 ? (
-                <span className="text-xs" style={{ color: 'var(--accent)', animation: 'pulse 1.5s infinite' }}>
-                  正在输入...
-                </span>
+                <span className="text-xs" style={{ color: 'var(--accent)', animation: 'pulse 1.5s infinite' }}>正在输入...</span>
               ) : currentConvo?.type === 'private' && getOtherOnline() ? (
                 <span className="text-xs" style={{ color: 'var(--success)' }}>在线</span>
               ) : getConvoSubtitle ? (
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {getConvoSubtitle}
-                </span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{getConvoSubtitle}</span>
               ) : null}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <IconButton
+              label={isGroupChat ? '群聊暂不支持通话' : '语音通话'}
+              disabled={isGroupChat}
               onClick={() => {
-                if (!currentConvo || currentConvo.type === 'group') {
-                  showNotice('群聊暂不支持通话，请使用私聊');
-                  return;
-                }
+                if (!currentConvo) return;
                 const otherId = currentConvo.members.find((m) => m !== user?.id);
                 startCall(currentConvo.id, 'voice', getConvoName, otherId || '');
               }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
-              title="语音通话">
+            >
               <PhoneIcon size={18} />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
+              label={isGroupChat ? '群聊暂不支持通话' : '视频通话'}
+              disabled={isGroupChat}
               onClick={() => {
-                if (!currentConvo || currentConvo.type === 'group') {
-                  showNotice('群聊暂不支持通话，请使用私聊');
-                  return;
-                }
+                if (!currentConvo) return;
                 const otherId = currentConvo.members.find((m) => m !== user?.id);
                 startCall(currentConvo.id, 'video', getConvoName, otherId || '');
               }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none' }}
-              title="视频通话">
+            >
               <VideoIcon size={18} />
-            </button>
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-              style={{ color: showSearch ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
-              onClick={() => setShowSearch(!showSearch)}
-              title="搜索消息">
+            </IconButton>
+            <IconButton label="投屏（暂未开放）" disabled>
+              <ScreenShareIcon size={18} />
+            </IconButton>
+            <IconButton label="搜索消息" active={showSearch} onClick={() => setShowSearch(!showSearch)}>
               <SearchIcon size={18} />
-            </button>
-            {currentConvo?.type === 'group' && currentConvo.group_id && (
-              <button className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-                style={{ color: showGroupMembers ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
-                onClick={() => setShowGroupMembers(!showGroupMembers)}
-                title="群成员">
-                <UsersIcon size={18} />
-              </button>
-            )}
+            </IconButton>
             <div className="relative">
-              <button
-                onClick={() => setShowMore(!showMore)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer chat-action-btn"
-                style={{ color: showMore ? 'var(--accent)' : 'var(--text-muted)', background: 'transparent', border: 'none' }}
-                title="更多操作">
+              <IconButton label="更多操作" active={showMore} onClick={() => setShowMore(!showMore)}>
                 <MoreIcon size={18} />
-              </button>
+              </IconButton>
               {showMore && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMore(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-50 w-44 py-2 rounded-xl animate-fade-in"
-                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
-                    <button
-                      onClick={() => { openCreateGroup(); setShowMore(false); }}
-                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
-                      style={{ color: 'var(--text-primary)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                      发起群聊
-                    </button>
-                    <button
-                      onClick={() => { openAddFriend(); setShowMore(false); }}
-                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
-                      style={{ color: 'var(--text-primary)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                      添加好友
-                    </button>
-                    <button
-                      onClick={() => { if (currentConvoId) markAsRead(currentConvoId); setShowMore(false); }}
-                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
-                      style={{ color: 'var(--text-primary)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                      标为已读
-                    </button>
-                    <div className="my-1" style={{ borderTop: '1px solid var(--border)' }} />
-                    <button
-                      onClick={() => {
-                        if (currentConvoId) {
-                          clearMessages(currentConvoId);
-                          showNotice('已清空当前会话记录（本地）');
-                        }
-                        setShowMore(false);
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm cursor-pointer"
-                      style={{ color: 'var(--danger)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
+                  <div className="menu-box absolute right-0 top-full z-50 mt-2 w-44 animate-fade-in">
+                    <button onClick={() => { openCreateGroup(); setShowMore(false); }} className="menu-item">发起群聊</button>
+                    <button onClick={() => { openAddFriend(); setShowMore(false); }} className="menu-item">添加好友</button>
+                    {currentConvo?.type === 'group' && (
+                      <button onClick={() => { setShowGroupPanel((v) => !v); setShowMore(false); }} className="menu-item">
+                        {showGroupPanel ? '收起群成员' : '展开群成员'}
+                      </button>
+                    )}
+                    <button onClick={() => { if (currentConvoId) markAsRead(currentConvoId); setShowMore(false); }} className="menu-item">标为已读</button>
+                    <div className="menu-divider" />
+                    <button onClick={() => { setShowMore(false); setConfirmClear(true); }} className="menu-item is-danger">
                       清空聊天记录
                     </button>
                   </div>
@@ -416,31 +404,26 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
           </div>
         </div>
 
-        {/* 轻提示 */}
         {notice && (
-          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[90] px-5 py-2.5 rounded-xl text-sm animate-fade-in"
-            style={{ background: 'rgba(17,24,39,0.95)', color: 'var(--text-primary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+          <div
+            className="fixed left-1/2 top-6 z-[90] -translate-x-1/2 rounded-xl px-5 py-2.5 text-sm animate-fade-in"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}
+          >
             {notice}
           </div>
         )}
 
         {showSearch && (
-          <div className="px-5 py-2 flex gap-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
-            <input
-              type="text"
+          <div className="flex gap-2 px-5 py-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+            <Input
+              className="flex-1"
               placeholder="搜索消息..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1 px-3.5 py-2 rounded-md outline-none text-sm"
-              style={inputStyle}
               autoFocus
             />
-            <button onClick={handleSearch}
-              className="px-4 py-2 rounded-md text-sm cursor-pointer text-white"
-              style={{ background: 'var(--accent)' }}>
-              搜索
-            </button>
+            <button onClick={handleSearch} className="ui-btn ui-btn-primary ui-btn-md">搜索</button>
           </div>
         )}
 
@@ -450,156 +433,129 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
               <div key={msg.id} className="py-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
                 <span style={{ color: 'var(--text-muted)' }}>
                   {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-                {' '}
+                </span>{' '}
                 <span style={{ color: 'var(--text-primary)' }}>{msg.content}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* 消息区域 - QQ 点阵背景 */}
-        <div className="flex-1 overflow-y-auto chat-messages-bg" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {decoratedMessages.map(({ msg, isMine, isSystem, showTimeSep, showAvatar, isLastOfSender, senderName, avatarColor }) => {
-            return (
-              <div key={msg.id}>
-                {showTimeSep && (
-                  <div className="flex items-center justify-center" style={{ margin: '10px 0' }}>
-                    <span className="time-divider-tag">
-                      {formatTimeSeparator(msg.created_at)}
-                    </span>
-                  </div>
-                )}
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+        {/* 消息区域 */}
+        <div className="chat-messages-bg flex-1 overflow-y-auto" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, overflowX: 'hidden' }}>
+          {decoratedMessages.map(({ msg, isMine, isSystem, showTimeSep, showAvatar, isLastOfSender, senderName }) => (
+            <div key={msg.id}>
+              {showTimeSep && (
+                <div className="flex items-center justify-center" style={{ margin: '6px 0' }}>
+                  <span className="time-divider-tag">{formatTimeSeparator(msg.created_at)}</span>
+                </div>
+              )}
 
-                {isSystem && (
-                  <div className="flex justify-center py-1">
-                    <span className="text-xs px-3 py-1 rounded"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
-                      {msg.content}
-                    </span>
-                  </div>
-                )}
+              {isSystem && (
+                <div className="flex justify-center py-1">
+                  <span className="rounded text-xs px-3 py-1" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                    {msg.content}
+                  </span>
+                </div>
+              )}
 
-                {!isSystem && (
-                  <div
-                    className={`flex items-start gap-2.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}
-                    style={{ maxWidth: '70%', alignSelf: isMine ? 'flex-end' : 'flex-start', marginLeft: isMine ? 'auto' : 0 }}
-                    onContextMenu={(e) => handleContextMenu(e, msg)}
-                  >
-                    {showAvatar ? (
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${avatarColor}, ${getAvatarColor(senderName + 'z')})` }}>
-                        {senderName[0]?.toUpperCase()}
-                      </div>
-                    ) : !isMine ? (
-                      <div className="w-9 flex-shrink-0" />
-                    ) : null}
+              {!isSystem && (
+                <div
+                  className={`flex items-start gap-2.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}
+                  style={{ maxWidth: '70%', minWidth: 0, alignSelf: isMine ? 'flex-end' : 'flex-start', marginLeft: isMine ? 'auto' : 0 }}
+                  onContextMenu={(e) => handleContextMenu(e, msg)}
+                >
+                  {showAvatar ? (
+                    <Avatar name={senderName} src={avatarSrc(userAvatars[msg.sender_id])} size="sm" />
+                  ) : (
+                    <div className="w-8 flex-shrink-0" />
+                  )}
 
-                    <div className="flex flex-col gap-0.5" style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
-                      {!isMine && showAvatar && currentConvo?.type === 'group' && (
-                        <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>
-                          {senderName}
-                        </span>
-                      )}
+                  <div className="flex flex-col gap-0.5" style={{ alignItems: isMine ? 'flex-end' : 'flex-start', minWidth: 0, maxWidth: '100%' }}>
+                    {!isMine && showAvatar && currentConvo?.type === 'group' && (
+                      <span className="ml-2 flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {senderName}
+                        {(() => {
+                          const role = currentConvo.group_id
+                            ? groupDetails[currentConvo.group_id]?.members.find((m) => m.user_id === msg.sender_id)?.role
+                            : '';
+                          return role === 'owner' || role === 'admin'
+                            ? <span className="group-role-badge">{role === 'owner' ? '群主' : '管理员'}</span>
+                            : null;
+                        })()}
+                      </span>
+                    )}
 
-                      <div
-                        className="animate-fade-in"
-                        style={{
-                          background: isMine ? 'linear-gradient(135deg, #3b82f6, #4f46e5)' : 'var(--bubble-other)',
-                          borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                          padding: '12px 16px',
-                          fontSize: 14,
-                          lineHeight: 1.5,
-                          color: isMine ? '#fff' : 'var(--text-primary)',
-                          wordWrap: 'break-word',
-                        }}
-                      >
-                        {renderMessageContent(msg)}
-                      </div>
-
-                      {isLastOfSender && (
-                        <span className="text-[11px] mt-1"
-                          style={{ color: 'var(--text-muted)', marginLeft: isMine ? 'auto' : 0 }}>
-                          {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          {isMine && msg.read_by && msg.read_by.length > 1 && (
-                            <span className="ml-2">已读 {msg.read_by.length - 1}</span>
-                          )}
-                        </span>
-                      )}
+                    <div
+                      className="animate-fade-in"
+                      style={{
+                        background: isMine ? 'var(--bubble-mine)' : 'var(--bubble-other)',
+                        borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                        padding: '6px 12px',
+                        fontSize: 14,
+                        lineHeight: 1.4,
+                        color: isMine ? 'var(--bubble-mine-text)' : 'var(--bubble-other-text)',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
+                        wordBreak: 'break-word',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        boxShadow: isMine
+                          ? 'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 2px rgba(0,0,0,0.20)'
+                          : 'inset 0 1px 0 rgba(255,255,255,0.30), var(--shadow-sm)',
+                        border: isMine ? 'none' : '1px solid var(--border)',
+                      }}
+                    >
+                      {renderMessageContent(msg)}
                     </div>
+
+                    {isLastOfSender && (
+                      <span className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)', marginLeft: isMine ? 'auto' : 0 }}>
+                        {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        {isMine && msg.read_by && msg.read_by.length > 1 && (
+                          <span className="ml-2">已读 {msg.read_by.length - 1}</span>
+                        )}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              )}
+            </div>
+          ))}
           <div ref={messagesEndRef} />
         </div>
 
         {contextMenu && (
-          <>
+          <Portal>
             <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-            <div className="fixed z-50 py-1 rounded-lg"
-              style={{
-                left: contextMenu.x,
-                top: contextMenu.y,
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                boxShadow: 'var(--shadow-lg)',
-                minWidth: 120,
-              }}>
-              <button
-                onClick={() => handleRecall(contextMenu.msgId)}
-                className="w-full px-4 py-2 text-left text-sm cursor-pointer"
-                style={{ color: 'var(--danger)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                撤回
-              </button>
+            <div className="menu-box fixed z-50" style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 120 }}>
+              <button onClick={() => handleRecall(contextMenu.msgId)} className="menu-item is-danger">撤回</button>
             </div>
-          </>
+          </Portal>
         )}
 
-        {/* 输入区域 - 现代深色风格 */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
-          <div className="flex gap-2 mb-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
+        {/* 输入区域 */}
+        <div style={{ padding: '10px 20px 12px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+          <div className="mb-2 flex gap-2">
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
             <div className="relative">
-              <button
-                onClick={() => setShowEmoji(!showEmoji)}
-                className="toolbar-btn"
-                title="表情">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <button onClick={() => setShowEmoji(!showEmoji)} className="toolbar-btn" title="表情">
+                <SmileIcon size={18} />
               </button>
-              {showEmoji && (
-                <EmojiPicker
-                  onSelect={(emoji) => setInput((prev) => prev + emoji)}
-                  onClose={() => setShowEmoji(false)}
-                />
-              )}
+              {showEmoji && <EmojiPicker onSelect={(emoji) => setInput((prev) => prev + emoji)} onClose={() => setShowEmoji(false)} />}
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="toolbar-btn"
-              title="图片">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+            <button onClick={() => fileInputRef.current?.click()} className="toolbar-btn" title="图片">
+              <ImageIcon size={18} />
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="toolbar-btn"
-              title="文件">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
+            <button onClick={() => fileInputRef.current?.click()} className="toolbar-btn" title="文件">
+              <PaperclipIcon size={18} />
+            </button>
+            <button onClick={startScreenshot} className="toolbar-btn" title="截图">
+              <ScreenshotIcon size={18} />
+            </button>
+            <button className="toolbar-btn" title="语音（暂未开放）" disabled>
+              <MicIcon size={18} />
             </button>
           </div>
 
@@ -617,27 +573,97 @@ export default function ChatArea({ onOpenProfile, send }: Props) {
                 target.style.height = Math.min(target.scrollHeight, 120) + 'px';
               }}
             />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="modern-send-btn"
-              title="发送"
-            >
-              <SendIcon size={20} />
+            <button onClick={handleSend} disabled={!input.trim()} className="modern-send-btn" title="发送">
+              <SendIcon size={18} />
+              <span>发送</span>
             </button>
           </div>
         </div>
+
+        {/* AI 助手浮标「小Q」（可拖动悬浮） */}
+        <button
+          className={`ai-fab${fabPos ? ' is-dragged-pos' : ''}${fabDragging ? ' is-dragging' : ''}`}
+          title="AI 助手 小Q（可拖动）"
+          aria-label="AI 助手"
+          style={fabPos ? { left: fabPos.x, top: fabPos.y } : undefined}
+          onPointerDown={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            fabDragRef.current = { startX: e.clientX, startY: e.clientY, baseX: r.left, baseY: r.top, moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = fabDragRef.current;
+            if (!d) return;
+            const dx = e.clientX - d.startX;
+            const dy = e.clientY - d.startY;
+            if (!d.moved && Math.abs(dx) + Math.abs(dy) < 6) return;
+            if (!d.moved) { d.moved = true; setFabDragging(true); }
+            setFabPos({
+              x: Math.min(Math.max(d.baseX + dx, 8), window.innerWidth - 66),
+              y: Math.min(Math.max(d.baseY + dy, 8), window.innerHeight - 66),
+            });
+          }}
+          onPointerUp={() => {
+            const d = fabDragRef.current;
+            fabDragRef.current = null;
+            setFabDragging(false);
+            if (d && !d.moved) setAiOpen((v) => { if (!v) setShowGroupPanel(false); return !v; });
+          }}
+        >
+          <Mascot size={40} floating />
+        </button>
+          </div>
+          {aiOpen && <AiAssistant onClose={() => setAiOpen(false)} />}
+          {showGroupPanel && currentConvo?.group_id && groupDetails[currentConvo.group_id] && (
+            <GroupInfoPanel
+              groupId={currentConvo.group_id}
+              ownerId={groupDetails[currentConvo.group_id].owner_id}
+              onOpenProfile={onOpenProfile}
+              onLeft={() => {
+                setShowGroupPanel(false);
+                const s = useChatStore.getState();
+                s.clearSelection();
+                // 有其他会话时自动落到最近一个，避免停在已退出的群
+                const next = s.conversations[0];
+                if (next) s.selectConversation(next.id);
+              }}
+            />
+          )}
+        </div>
       </div>
 
-      {showGroupMembers && currentConvo?.group_id && groupDetails[currentConvo.group_id] && (
-        <GroupMembers
-          groupId={currentConvo.group_id}
-          ownerId={groupDetails[currentConvo.group_id].owner_id}
-          onClose={() => setShowGroupMembers(false)}
-          onOpenProfile={onOpenProfile}
-        />
-      )}
+        {/* 截图框选 */}
+        {shotSrc && (
+          <ScreenshotCrop
+            src={shotSrc}
+            onCancel={() => setShotSrc(null)}
+            onSend={(file) => { setShotSrc(null); sendImageFile(file); }}
+          />
+        )}
 
+        {/* 文件预览 */}
+        {preview && (
+          <FilePreview
+            url={preview.url}
+            fileName={preview.fileName}
+            fileType={preview.type === 'image' ? 'image' : 'unknown'}
+            onClose={() => setPreview(null)}
+          />
+        )}
+
+        <Confirm
+          open={confirmClear}
+        title="清空聊天记录"
+        description={<>将清空当前会话在本设备的聊天记录，此操作不可恢复。</>}
+        confirmText="清空"
+        danger
+        onConfirm={() => {
+          if (currentConvoId) clearMessages(currentConvoId);
+          setConfirmClear(false);
+          showNotice('已清空当前会话记录（本地）');
+        }}
+        onClose={() => setConfirmClear(false)}
+      />
     </>
   );
 }

@@ -20,6 +20,8 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, nickname: string) => Promise<void>;
+  sendVerifyCode: (email: string) => Promise<void>;
+  loginWithEmail: (email: string, code: string) => Promise<void>;
   logout: () => void;
   fetchMe: () => Promise<void>;
 }
@@ -58,6 +60,16 @@ export const useAuthStore: UseBoundStore<StoreApi<AuthState>> =
 
     register: async (username, password, nickname) => {
       const res = await authApi.register(username, password, nickname);
+      useAccountsStore.getState().addAccount(res.token, res.user);
+      set(syncFromAccounts());
+    },
+
+    sendVerifyCode: async (email) => {
+      await authApi.sendVerifyCode(email);
+    },
+
+    loginWithEmail: async (email, code) => {
+      const res = await authApi.loginWithEmail(email, code);
       useAccountsStore.getState().addAccount(res.token, res.user);
       set(syncFromAccounts());
     },

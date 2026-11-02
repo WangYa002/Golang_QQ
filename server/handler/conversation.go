@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"golang-qq/cache"
 	"golang-qq/middleware"
 	"golang-qq/model"
 	"golang-qq/ws"
@@ -18,6 +20,12 @@ import (
 
 func GetConversations(c *gin.Context) {
 	userID := middleware.GetUserID(c)
+
+	// 优先读缓存（完整 JSON）
+	if cached, err := cache.GetConvoList(c, userID.Hex()); err == nil {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", cached)
+		return
+	}
 
 	opts := options.Find().SetSort(bson.M{"updated_at": -1})
 	cursor, err := model.Conversations.Find(c, bson.M{"members": userID}, opts)
@@ -32,6 +40,12 @@ func GetConversations(c *gin.Context) {
 	if convos == nil {
 		convos = []model.Conversation{}
 	}
+
+	// 写缓存（失败不影响响应）
+	if data, err := json.Marshal(convos); err == nil {
+		cache.SetConvoList(c, userID.Hex(), data)
+	}
+
 	c.JSON(http.StatusOK, convos)
 }
 
@@ -76,6 +90,10 @@ func CreateConversation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create failed"})
 		return
 	}
+
+	// 双方会话列表缓存失效
+	cache.InvalidateConvoList(c, userID.Hex())
+	cache.InvalidateConvoList(c, otherID.Hex())
 
 	c.JSON(http.StatusCreated, convo)
 }

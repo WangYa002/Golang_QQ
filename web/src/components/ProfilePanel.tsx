@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getUser, updateMe } from '../api/users';
-import { uploadFile } from '../api/client';
+import { uploadFile, mediaUrl } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { createConversation } from '../api/conversations';
 import { useChatStore } from '../store/chat';
+import { Avatar } from './ui/Avatar';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { IconButton } from './ui/IconButton';
+import { CloseIcon, CameraIcon, MailIcon } from './icons';
 import type { User } from '../types';
-
-const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
 
 interface Props {
   userId: string;
@@ -47,6 +45,13 @@ export default function ProfilePanel({ userId, onClose }: Props) {
     load();
   }, [userId]);
 
+  // store 里的我更新后（上传头像/保存资料触发 fetchMe）同步显示，但不动编辑中的昵称/签名输入
+  useEffect(() => {
+    if (isMe && currentUser) {
+      setUser(currentUser);
+    }
+  }, [isMe, currentUser]);
+
   const handleSave = async () => {
     await updateMe({ nickname, bio });
     await fetchMe();
@@ -70,55 +75,33 @@ export default function ProfilePanel({ userId, onClose }: Props) {
 
   if (loading) {
     return (
-      <div className="w-[320px] flex items-center justify-center"
-        style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}>
-        <div className="animate-spin w-6 h-6 rounded-full border-2 border-t-transparent"
-          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+      <div className="flex w-[320px] items-center justify-center" style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}>
+        <div className="animate-spin h-6 w-6 rounded-full border-2" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
       </div>
     );
   }
 
   if (!user) return null;
+  const displayName = user.nickname || user.username;
 
   return (
-    <div className="w-[320px] flex flex-col animate-slide-right"
-      style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}>
+    <div className="flex w-[320px] flex-col animate-slide-right" style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}>
 
-      <div className="px-5 py-4 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border)' }}>
+      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           {isMe ? '个人资料' : '用户资料'}
         </h3>
-        <button
-          onClick={onClose}
-          className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <IconButton label="关闭" size="sm" onClick={onClose}>
+          <CloseIcon size={14} />
+        </IconButton>
       </div>
 
       <div className="px-6 py-5 text-center">
-        <div className="relative inline-block group">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto overflow-hidden text-white"
-            style={{ background: `linear-gradient(135deg, ${getAvatarColor(user.nickname || user.username)}, ${getAvatarColor((user.nickname || user.username) + 'z')})` }}>
-            {user.avatar ? (
-              <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-            ) : (
-              user.nickname?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()
-            )}
-          </div>
+        <div className="group relative inline-block">
+          <Avatar name={displayName} src={user.avatar ? mediaUrl(user.avatar) : undefined} size="lg" />
           {isMe && editing && (
-            <label className="absolute inset-0 flex items-center justify-center rounded-2xl cursor-pointer"
-              style={{ background: 'rgba(0,0,0,0.5)' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
+            <label className="absolute inset-0 flex cursor-pointer items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)', borderRadius: '50%' }}>
+              <CameraIcon size={20} className="text-white" />
               <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
             </label>
           )}
@@ -126,60 +109,38 @@ export default function ProfilePanel({ userId, onClose }: Props) {
 
         {editing ? (
           <div className="mt-4 space-y-3">
-            <input
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg outline-none text-sm text-center"
-              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-              placeholder="昵称"
-            />
+            <Input className="w-full text-center" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="昵称" />
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg outline-none text-sm resize-none"
-              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+              className="w-full resize-none"
+              style={{
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 14px',
+                fontSize: 14,
+                outline: 'none',
+              }}
               placeholder="个性签名"
               rows={3}
             />
             <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="flex-1 py-2 rounded-xl text-sm font-medium text-white cursor-pointer"
-                style={{ background: 'var(--accent)' }}>
-                保存
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                className="flex-1 py-2 rounded-xl text-sm cursor-pointer"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                取消
-              </button>
+              <Button block variant="primary" onClick={handleSave}>保存</Button>
+              <Button block variant="secondary" onClick={() => setEditing(false)}>取消</Button>
             </div>
           </div>
         ) : (
           <>
-            <h2 className="mt-4 text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-              {user.nickname || user.username}
-            </h2>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>@{user.username}</p>
-            {user.bio && (
-              <p className="mt-3 text-sm px-2" style={{ color: 'var(--text-secondary)' }}>{user.bio}</p>
-            )}
+            <h2 className="mt-4 text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{displayName}</h2>
+            <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>@{user.username}</p>
+            {user.bio && <p className="mt-3 px-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.bio}</p>}
 
             {isMe ? (
-              <button
-                onClick={() => setEditing(true)}
-                className="mt-4 px-6 py-2 rounded-xl text-sm font-medium cursor-pointer"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                编辑资料
-              </button>
+              <Button variant="secondary" className="mt-4" icon={undefined} onClick={() => setEditing(true)}>编辑资料</Button>
             ) : (
-              <button
-                onClick={handleStartChat}
-                className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white cursor-pointer"
-                style={{ background: 'var(--accent)' }}>
-                发送消息
-              </button>
+              <Button variant="primary" className="mt-4" onClick={handleStartChat}>发送消息</Button>
             )}
           </>
         )}
@@ -188,10 +149,7 @@ export default function ProfilePanel({ userId, onClose }: Props) {
       {!editing && user.email && (
         <div className="px-6">
           <div className="flex items-center gap-3">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-            </svg>
+            <MailIcon size={16} className="text-[var(--text-muted)]" />
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{user.email}</span>
           </div>
         </div>

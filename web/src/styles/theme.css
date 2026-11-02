@@ -1,0 +1,133 @@
+/* =========================================================
+   主题令牌系统（暗色 / 浅色双模式）
+   —— 页面根元素通过 data-theme="dark|light" 切换
+   —— 所有颜色一律走这些变量，组件内禁止硬编码色值
+   ========================================================= */
+
+/* ---------- 共享令牌（不随主题变化） ---------- */
+:root {
+  --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei UI",
+    "Microsoft YaHei", "HarmonyOS Sans SC", "Source Han Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  /* 间距（10px 网格：4/8/12/16/20/24/32/40） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* 动效 */
+  --dur: 0.15s;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- 暗色主题（默认） ---------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-app: #0f1218;
+  --bg-primary: #0f1218;   /* 内容区/聊天区 */
+  --bg-secondary: #171c24; /* 左栏、列表面板、浮层 */
+  --bg-tertiary: #1f2730;  /* 卡片、列表项表面 */
+  --bg-titlebar: #1a212b;  /* 顶部账号栏（与下方内容区略作区分） */
+  --bg-hover: #252e39;
+  --bg-active: #2c3642;
+  --bg-input: #131820;
+  --bg-chat: #0f1218;
+
+  --text-primary: #eaeef3;
+  --text-secondary: #9aa5b1;
+  --text-muted: #6b7683;
+  --text-on-accent: #ffffff;
+
+  --accent: #37a3ff;
+  --accent-light: #6cc0ff;
+  --accent-dark: #1f86e8;
+  --accent-strong: #1f86e8;
+  --accent-glow: rgba(55, 163, 255, 0.16);
+  --accent-soft: rgba(55, 163, 255, 0.14);
+
+  --success: #2fd18a;
+  --danger: #ff5b5b;
+  --danger-soft: rgba(255, 91, 91, 0.12);
+  --warning: #ffb020;
+  --info: #37a3ff;
+  --online: #2fd18a;
+  --offline: #6b7683;
+
+  --border: #232b35;
+  --border-light: #2c3642;
+  --border-focus: var(--accent);
+
+  --glass-bg: rgba(23, 28, 36, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.06);
+
+  --bubble-mine: #1f86e8;
+  --bubble-mine-text: #ffffff;
+  --bubble-other: #1f2730;
+  --bubble-other-text: #eaeef3;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 3px var(--accent-glow);
+}
+
+/* ---------- 浅色主题（Codex 风暖纸色调：暖白底 + 白色面板 + 低饱和描边） ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f7f6f3;
+  --bg-primary: #f7f6f3;
+  --bg-secondary: #fffefb;
+  --bg-tertiary: #ffffff;
+  --bg-titlebar: #efeee9;
+  --bg-hover: #eceae4;
+  --bg-active: #e4edf9;
+  --bg-input: #f3f2ee;
+  --bg-chat: #f7f6f3;
+
+  --text-primary: #211f1c;
+  --text-secondary: #5f5d55;
+  --text-muted: #8f8c82;
+  --text-on-accent: #ffffff;
+
+  --accent: #1d9bf0;
+  --accent-light: #4bb3f5;
+  --accent-dark: #0f86dd;
+  --accent-strong: #0f86dd;
+  --accent-glow: rgba(29, 155, 240, 0.14);
+  --accent-soft: rgba(29, 155, 240, 0.1);
+
+  --success: #0bba7d;
+  --danger: #e0433e;
+  --danger-soft: rgba(224, 67, 62, 0.09);
+  --warning: #d98f06;
+  --info: #1d9bf0;
+  --online: #0bba7d;
+  --offline: #c7c4bc;
+
+  --border: #e5e2da;
+  --border-light: #eeede8;
+  --border-focus: var(--accent);
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.06);
+
+  --bubble-mine: #1d9bf0;
+  --bubble-mine-text: #ffffff;
+  --bubble-other: #ffffff;
+  --bubble-other-text: #211f1c;
+
+  --shadow-xs: 0 1px 2px rgba(45, 40, 30, 0.05);
+  --shadow-sm: 0 1px 3px rgba(45, 40, 30, 0.07);
+  --shadow-md: 0 4px 14px rgba(45, 40, 30, 0.09);
+  --shadow-lg: 0 12px 32px rgba(45, 40, 30, 0.13);
+  --shadow-focus: 0 0 0 3px var(--accent-glow);
+}

@@ -1,6 +1,16 @@
 node_modules/
 dist/
 .env
+.env.*
+docker-compose.yml
+deploy/certs/
+tests/e2e/qa-data.json
+web/release/
+web/release2/
+web/release-ios/
+*.tar.gz
+__pycache__/
+*.pyc
 *.exe
 *.exe~
 uploads/

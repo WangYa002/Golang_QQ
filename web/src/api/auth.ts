@@ -14,3 +14,17 @@ export function login(username: string, password: string) {
     body: JSON.stringify({ username, password }),
   });
 }
+
+export function sendVerifyCode(email: string) {
+  return request<{ message: string }>('/auth/send-code', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function loginWithEmail(email: string, code: string) {
+  return request<AuthResponse>('/auth/login/email', {
+    method: 'POST',
+    body: JSON.stringify({ email, code }),
+  });
+}

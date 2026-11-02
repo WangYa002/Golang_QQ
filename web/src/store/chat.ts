@@ -15,6 +15,13 @@ import { useAccountsStore } from './accounts';
  * 切换账号时：accounts.activeId 变化 → 顶层视图刷新为新账号切片。
  */
 
+/** 每个会话的本地偏好（QQ 语义：置顶/免打扰为机器偏好；删除仅移出列表，新消息即恢复） */
+export interface ConvoPref {
+  pinned?: boolean;
+  muted?: boolean;
+  hidden?: boolean;
+}
+
 interface ChatData {
   conversations: Conversation[];
   currentConvoId: string | null;
@@ -22,8 +29,10 @@ interface ChatData {
   typingUsers: Record<string, string[]>;
   onlineUsers: Record<string, boolean>;
   userNames: Record<string, string>;
+  userAvatars: Record<string, string>;
   groupDetails: Record<string, Group>;
   unreadCount: Record<string, number>;
+  convPrefs: Record<string, ConvoPref>;
   chatViewActive: boolean;
   initialized: boolean;
 }
@@ -35,11 +44,34 @@ const emptySlice = (): ChatData => ({
   typingUsers: {},
   onlineUsers: {},
   userNames: {},
+  userAvatars: {},
   groupDetails: {},
   unreadCount: {},
+  convPrefs: {},
   chatViewActive: true,
   initialized: false,
 });
+
+// —— 会话偏好持久化（按账号隔离） ——
+const prefsKey = (uid: string) => `qq_conv_prefs_${uid}`;
+
+function loadPrefs(uid: string): Record<string, ConvoPref> {
+  try {
+    const raw = localStorage.getItem(prefsKey(uid));
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // 损坏数据则忽略
+  }
+  return {};
+}
+
+function savePrefs(uid: string, prefs: Record<string, ConvoPref>) {
+  try {
+    localStorage.setItem(prefsKey(uid), JSON.stringify(prefs));
+  } catch {
+    // 存储失败不影响运行
+  }
+}
 
 interface ChatState extends ChatData {
   /** 当前账号 userId（只读派生） */
@@ -48,6 +80,8 @@ interface ChatState extends ChatData {
   // —— actions ——
   fetchConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
+  /** 清空当前选中会话（退群 / 删除会话后回到空态） */
+  clearSelection: () => void;
   addMessage: (msg: Message) => void;
   setTyping: (convoId: string, userId: string) => void;
   setUserOnline: (userId: string) => void;
@@ -61,6 +95,8 @@ interface ChatState extends ChatData {
   clearMessages: (convoId: string) => void;
   setChatViewActive: (active: boolean) => void;
   handleMessageRecalled: (convoId: string, msgId: string) => void;
+  setConvPref: (convoId: string, patch: ConvoPref) => void;
+  hideConversation: (convoId: string) => void;
 }
 
 /** 账号隔离的存储（非响应式，仅内部用） */
@@ -68,7 +104,7 @@ const perUser: Record<string, ChatData> = {};
 
 function getSlice(uid: string | null): ChatData {
   if (!uid) return emptySlice();
-  if (!perUser[uid]) perUser[uid] = emptySlice();
+  if (!perUser[uid]) perUser[uid] = { ...emptySlice(), convPrefs: loadPrefs(uid) };
   return perUser[uid];
 }
 
@@ -83,8 +119,10 @@ function viewOf(uid: string | null): Partial<ChatState> {
     typingUsers: s.typingUsers,
     onlineUsers: s.onlineUsers,
     userNames: s.userNames,
+    userAvatars: s.userAvatars,
     groupDetails: s.groupDetails,
     unreadCount: s.unreadCount,
+    convPrefs: s.convPrefs,
     chatViewActive: s.chatViewActive,
   };
 }
@@ -140,6 +178,10 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
       }
     },
 
+    clearSelection: () => {
+      mutate(set, () => ({ currentConvoId: null }));
+    },
+
     addMessage: (msg) => {
       const uid = useAccountsStore.getState().active()?.userId ?? null;
       if (!uid) return;
@@ -153,6 +195,15 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
             : c
         ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
       ];
+      // 免打扰的会话不产生未读；已被删除（隐藏）的会话收到新消息时恢复显示（QQ 行为）
+      const pref = slice.convPrefs[msg.conversation_id];
+      let prefsDirty = false;
+      if (pref?.hidden) {
+        const { [msg.conversation_id]: _drop, ...restPrefs } = slice.convPrefs;
+        slice.convPrefs = restPrefs;
+        prefsDirty = true;
+      }
+      const muted = !!pref?.muted;
       const viewing = slice.chatViewActive && slice.currentConvoId === msg.conversation_id;
       if (viewing) {
         // 正在查看该会话：未读恒为 0，来消息时主动清除（防历史残留/重复投递）
@@ -160,12 +211,13 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
           const { [msg.conversation_id]: _, ...rest } = slice.unreadCount;
           slice.unreadCount = rest;
         }
-      } else {
+      } else if (!muted) {
         slice.unreadCount = {
           ...slice.unreadCount,
           [msg.conversation_id]: (slice.unreadCount[msg.conversation_id] || 0) + 1,
         };
       }
+      if (prefsDirty) savePrefs(uid, slice.convPrefs);
       set(() => viewOf(uid));
     },
 
@@ -201,13 +253,14 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
     fetchUserName: async (userId) => {
       const uid = useAccountsStore.getState().active()?.userId ?? null;
       if (!uid) return;
-      if (getSlice(uid).userNames[userId]) return;
+      if (getSlice(uid).userNames[userId] !== undefined && getSlice(uid).userAvatars[userId] !== undefined) return;
       try {
         // 按 ID 直接查询（旧实现用 searchUsers 按用户名搜 ObjectID，永远匹配不到）
         const user = await userApi.getUser(userId);
         if (user) {
           mutate(set, (s) => ({
             userNames: { ...s.userNames, [userId]: user.nickname || user.username },
+            userAvatars: { ...s.userAvatars, [userId]: user.avatar || '' },
           }));
         }
       } catch {
@@ -295,6 +348,38 @@ export const useChatStore: UseBoundStore<StoreApi<ChatState>> =
           },
         };
       });
+    },
+
+    setConvPref: (convoId, patch) => {
+      const uid = useAccountsStore.getState().active()?.userId ?? null;
+      if (!uid) return;
+      const slice = getSlice(uid);
+      slice.convPrefs = {
+        ...slice.convPrefs,
+        [convoId]: { ...(slice.convPrefs[convoId] || {}), ...patch },
+      };
+      savePrefs(uid, slice.convPrefs);
+      set(() => viewOf(uid));
+    },
+
+    hideConversation: (convoId) => {
+      const uid = useAccountsStore.getState().active()?.userId ?? null;
+      if (!uid) return;
+      const slice = getSlice(uid);
+      slice.convPrefs = {
+        ...slice.convPrefs,
+        [convoId]: { ...(slice.convPrefs[convoId] || {}), hidden: true },
+      };
+      // 从列表移除后不再保留未读与消息缓存；若删除的是当前打开的会话则一并关闭
+      if (slice.unreadCount[convoId]) {
+        const { [convoId]: _u, ...restUnread } = slice.unreadCount;
+        slice.unreadCount = restUnread;
+      }
+      const { [convoId]: _m, ...restMsgs } = slice.messages;
+      slice.messages = restMsgs;
+      if (slice.currentConvoId === convoId) slice.currentConvoId = null;
+      savePrefs(uid, slice.convPrefs);
+      set(() => viewOf(uid));
     },
   };
 });

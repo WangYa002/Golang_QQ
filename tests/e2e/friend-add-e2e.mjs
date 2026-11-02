@@ -5,7 +5,7 @@ import puppeteer from 'puppeteer-core';
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const OUT = fileURLToPath(new URL('./', import.meta.url));
-const BASE = 'http://localhost:5173';
+const BASE = process.env.BASE_URL ?? 'http://localhost:5173';
 const API = 'http://localhost:8080';
 let passed = 0;
 let failed = 0;
@@ -39,14 +39,22 @@ const py = await ctxY.newPage();
 async function login(page, acc) {
   await page.goto(BASE, { waitUntil: 'networkidle0' });
   await page.evaluate(({ token, user }) => {
-    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], activeId: user.id }));
+    localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], lastActive: user.id }));
+    sessionStorage.setItem('golang_qq_active', user.id);
   }, acc);
   await page.reload({ waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 2200));
 }
 
 async function openAddFriend(page, query) {
-  await page.click('button[aria-label="添加好友"]');
+  // 重构后入口：会话面板右上角「+」（aria-label=新建）→ 菜单「添加好友」
+  await page.click('button[aria-label="新建"]');
+  await new Promise((r) => setTimeout(r, 400));
+  const menuItems = await page.$$('.menu-item');
+  for (const m of menuItems) {
+    const t = await m.evaluate((el) => el.textContent?.trim());
+    if (t === '添加好友') { await m.click(); break; }
+  }
   await new Promise((r) => setTimeout(r, 600));
   await page.type('input[placeholder="输入用户名或昵称"]', query);
   const btns = await page.$$('button');
@@ -80,8 +88,7 @@ const pending = await api('/api/friends/requests', { token: Y.token });
 check('后端 Y 收到 1 条 pending 申请', pending.data.length === 1, `count=${pending.data.length}`);
 
 // 重复点：重新搜索，按钮应为"已发送"且不产生新申请
-await px.click('.fixed.inset-0').catch(() => {});
-await px.click('button[aria-label="添加好友"]').catch(() => {});
+await px.keyboard.press('Escape'); // 关闭搜索弹窗（Modal 支持 Esc）
 await new Promise((r) => setTimeout(r, 500));
 await openAddFriend(px, Y.user.username);
 const dupState = await px.evaluate(() => {
@@ -94,7 +101,7 @@ const pending2 = await api('/api/friends/requests', { token: Y.token });
 check('重复操作未产生新申请（仍为 1 条）', pending2.data.length === 1, `count=${pending2.data.length}`);
 await px.screenshot({ path: OUT + 'e2e-1-sent.png' });
 // 关闭 X 的搜索弹窗，回到聊天页
-await px.evaluate(() => { document.querySelector('.fixed.inset-0')?.click(); });
+await px.keyboard.press('Escape');
 await new Promise((r) => setTimeout(r, 600));
 
 console.log('\n=== E2E-2: Y 登录收到申请 → 同意 → 双方实时成为好友 ===\n');

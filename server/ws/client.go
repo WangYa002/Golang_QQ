@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"golang-qq/cache"
 	"golang-qq/model"
 )
 
@@ -20,15 +21,43 @@ type Client struct {
 	UserID primitive.ObjectID
 }
 
+// Close 优雅关闭连接（用于单点登录顶号）：先发送关闭帧再关 socket，
+// 触发 ReadPump 退出并 Unregister；若本连接已不是当前注册连接，
+// Hub 不会广播 user_offline（由 Hub.Unregister 的 cur==client 校验保证）。
+func (c *Client) Close() {
+	c.Conn.WriteControl(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "logged in elsewhere"),
+		time.Now().Add(writeWait))
+	c.Conn.Close()
+}
+
+// trySend 非阻塞安全投递：缓冲满或 channel 已关闭时返回 false 并丢弃，
+// 绝不阻塞调用方（用于后台 goroutine / 心跳，避免卡死或 panic）。
+func (c *Client) trySend(msg *BroadcastMsg) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ok = false // 向已关闭的 channel 发送 → 安全降级
+		}
+	}()
+	select {
+	case c.Send <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
 type WSMessage struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 }
 
 type ChatData struct {
-	ConversationID string `json:"conversation_id"`
-	Type           string `json:"type"`
-	Content        string `json:"content"`
+	ConversationID string                 `json:"conversation_id"`
+	Type           string                 `json:"type"`
+	Content        string                 `json:"content"`
+	ClientMsgID    string                 `json:"client_msg_id"` // 客户端生成的唯一消息 ID，用于幂等去重
+	Metadata       *model.MessageMetadata `json:"metadata,omitempty"`
 }
 
 type TypingData struct {
@@ -71,22 +100,16 @@ func (c *Client) ReadPump() {
 	defer func() {
 		c.Hub.Unregister <- c
 		c.Conn.Close()
-
-		model.Users.UpdateByID(context.Background(), c.UserID, bson.M{
-			"$set": bson.M{"status": "offline", "updated_at": time.Now()},
-		})
-
-		c.Hub.Broadcast <- &BroadcastMsg{
-			TargetIDs: []primitive.ObjectID{},
-			Type:      "user_offline",
-			Data:      map[string]string{"user_id": c.UserID.Hex()},
-		}
+		// 离线状态与 user_offline 广播由 Hub.Unregister 分支统一处理：
+		// 仅在"被移除的连接仍是当前注册连接"时执行，避免被顶号/重连的旧连接误报下线。
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		// 收到 pong = 连接存活，续期 Redis 在线状态 TTL
+		cache.KeepOnline(context.Background(), c.UserID.Hex())
 		return nil
 	})
 
@@ -109,7 +132,7 @@ func (c *Client) ReadPump() {
 		case "read":
 			c.handleRead(msg.Data)
 		case "heartbeat":
-			c.Send <- &BroadcastMsg{Type: "heartbeat", Data: map[string]string{}}
+			c.trySend(&BroadcastMsg{Type: "heartbeat", Data: map[string]string{}})
 		case "message_recall":
 			c.handleRecall(msg.Data)
 		case "call":
@@ -156,61 +179,8 @@ func (c *Client) handleChat(data json.RawMessage) {
 	if err := json.Unmarshal(data, &chat); err != nil {
 		return
 	}
-
-	convoID, err := primitive.ObjectIDFromHex(chat.ConversationID)
-	if err != nil {
-		return
-	}
-
-	var convo model.Conversation
-	err = model.Conversations.FindOne(context.Background(), bson.M{"_id": convoID}).Decode(&convo)
-	if err != nil {
-		return
-	}
-
-	isMember := false
-	for _, m := range convo.Members {
-		if m == c.UserID {
-			isMember = true
-			break
-		}
-	}
-	if !isMember {
-		return
-	}
-
-	msg := model.Message{
-		ID:             primitive.NewObjectID(),
-		ConversationID: convoID,
-		SenderID:       c.UserID,
-		Type:           chat.Type,
-		Content:        chat.Content,
-		ReadBy:         []primitive.ObjectID{c.UserID},
-		CreatedAt:      time.Now(),
-	}
-
-	_, err = model.Messages.InsertOne(context.Background(), msg)
-	if err != nil {
-		return
-	}
-
-	model.Conversations.UpdateByID(context.Background(), convoID, bson.M{
-		"$set": bson.M{
-			"last_message": model.LastMessage{
-				Content:   chat.Content,
-				SenderID:  c.UserID,
-				Type:      chat.Type,
-				CreatedAt: time.Now(),
-			},
-			"updated_at": time.Now(),
-		},
-	})
-
-	c.Hub.Broadcast <- &BroadcastMsg{
-		TargetIDs: convo.Members,
-		Type:      "new_message",
-		Data:      msg,
-	}
+	// 与 HTTP 发送通路共用同一处理函数（幂等去重由 client_msg_id 保证）
+	_ = SendChatMessage(c.Hub, c.UserID, chat)
 }
 
 func (c *Client) handleTyping(data json.RawMessage) {
@@ -359,7 +329,22 @@ func (c *Client) handleCall(data json.RawMessage) {
 	var fromUser model.User
 	model.Users.FindOne(context.Background(), bson.M{"_id": c.UserID}).Decode(&fromUser)
 
-	callID := primitive.NewObjectID().Hex()
+	// busy 判定收归服务端：被叫已有未结束通话 → 直接回拒，不依赖客户端状态
+	callee := targets[0]
+	if CallBusy(callee) || CallBusy(c.UserID) {
+		c.Hub.Broadcast <- &BroadcastMsg{
+			TargetIDs: []primitive.ObjectID{c.UserID},
+			Type:      "call_rejected",
+			Data: map[string]interface{}{
+				"call_id":         "",
+				"conversation_id": call.ConversationID,
+				"reason":          "busy",
+			},
+		}
+		return
+	}
+
+	callID := RegisterCall(convoID, c.UserID, callee)
 	c.Hub.Broadcast <- &BroadcastMsg{
 		TargetIDs: targets,
 		Type:      "call_incoming",
@@ -405,14 +390,23 @@ func (c *Client) handleCallEvent(data json.RawMessage) {
 	switch evt.Kind {
 	case "accept":
 		msgType = "call_accepted"
+		MarkAccepted(evt.CallID)
 	case "reject":
 		msgType = "call_rejected"
+		FinishCall(evt.CallID)
 	case "hangup":
 		msgType = "call_ended"
+		FinishCall(evt.CallID)
 	case "signal":
 		msgType = "call_signal"
 	default:
 		return
+	}
+
+	// accept/reject/hangup 广播给全体成员（含自己的其他设备）：
+	// 多端在线时，未参与媒体的那台也能同步收线，避免僵尸振铃误拒后续来电
+	if evt.Kind == "accept" || evt.Kind == "reject" || evt.Kind == "hangup" {
+		targets = append(targets, c.UserID)
 	}
 
 	c.Hub.Broadcast <- &BroadcastMsg{

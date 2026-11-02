@@ -2,7 +2,7 @@
 import puppeteer from 'puppeteer-core';
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const BASE = 'http://localhost:5173';
+const BASE = process.env.BASE_URL ?? 'http://localhost:5173';
 const API = 'http://localhost:8080';
 const WS = 'ws://localhost:8080/ws';
 let passed = 0, failed = 0;
@@ -42,23 +42,24 @@ const browser = await puppeteer.launch({ executablePath: EDGE, headless: 'new', 
 const page = await browser.newPage();
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 await page.evaluate(({ token, user }) => {
-  localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], activeId: user.id }));
+  localStorage.setItem('golang_qq_accounts', JSON.stringify({ accounts: [{ userId: user.id, token, user }], lastActive: user.id }));
+    sessionStorage.setItem('golang_qq_active', user.id);
 }, { token: alice.token, user: alice.user });
 await page.reload({ waitUntil: 'networkidle0' });
 await new Promise((r) => setTimeout(r, 2500));
 
 const groupBadge = () => page.evaluate(() => {
-  const rows = [...document.querySelectorAll('.conversation-pane div[style*="padding: 12px"]')];
+  const rows = [...document.querySelectorAll('.conversation-pane .convo-item')];
   const row = rows.find((el) => /运动|小分队/.test(el.textContent || ''));
   if (!row) return null;
-  const badge = row.querySelector('[class*="min-w-["]');
+  const badge = row.querySelector('.unread-badge');
   return badge ? badge.textContent?.trim() : null;
 });
 const navBadge = () => page.evaluate(() => document.querySelector('button[aria-label="消息"] .nav-badge')?.textContent?.trim() ?? null);
 
 // 打开私聊
 await page.evaluate(() => {
-  const rows = [...document.querySelectorAll('.conversation-pane div[style*="padding: 12px"]')];
+  const rows = [...document.querySelectorAll('.conversation-pane .convo-item')];
   rows.find((el) => el.textContent?.includes('Bob'))?.click();
 });
 await new Promise((r) => setTimeout(r, 1200));
@@ -72,7 +73,7 @@ console.log('收到 3 条群消息后：群行徽章 =', await groupBadge(), '| 
 
 // 真实鼠标点击群行
 const box = await page.evaluate(() => {
-  const rows = [...document.querySelectorAll('.conversation-pane div[style*="padding: 12px"]')];
+  const rows = [...document.querySelectorAll('.conversation-pane .convo-item')];
   const row = rows.find((el) => /运动|小分队/.test(el.textContent || ''));
   const r = row?.getBoundingClientRect();
   return r ? { x: r.x + 80, y: r.y + r.height / 2 } : null;
@@ -104,7 +105,7 @@ check('离开会话后收消息计入未读', Object.values(storeUnread).reduce(
 await page.click('button[aria-label="消息"]');
 await new Promise((r) => setTimeout(r, 1000));
 const box2 = await page.evaluate(() => {
-  const rows = [...document.querySelectorAll('.conversation-pane div[style*="padding: 12px"]')];
+  const rows = [...document.querySelectorAll('.conversation-pane .convo-item')];
   const row = rows.find((el) => /运动|小分队/.test(el.textContent || ''));
   const r = row?.getBoundingClientRect();
   return r ? { x: r.x + 80, y: r.y + r.height / 2 } : null;

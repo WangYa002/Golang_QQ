@@ -2,6 +2,8 @@ import { Component, type ReactNode } from 'react';
 import { useAuthStore } from './store/auth';
 import Login from './pages/Login';
 import Chat from './pages/Chat';
+import { Capacitor } from '@capacitor/core';
+import MobileApp from './mobile/MobileApp';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null as Error | null };
@@ -71,6 +73,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 function AppInner() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (Capacitor.isNativePlatform() || new URLSearchParams(window.location.search).has('mobile')) {
+    return <MobileApp authenticated={isAuthenticated} />;
+  }
   return isAuthenticated ? <Chat /> : <Login />;
 }
 
